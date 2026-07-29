@@ -1,10 +1,16 @@
 <script>
 	/** Labelled switch. Bind `checked`; label via prop or children. */
-	let { checked = $bindable(false), label, children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { checked = $bindable(false), label, children, class: klass = '', ...rest } = $props();
 </script>
 
 <label class="toggle">
-	<input type="checkbox" class="switch" bind:checked {...rest} />
+	<input type="checkbox" class="switch {klass}" bind:checked {...rest} />
 	<span>{#if children}{@render children()}{:else}{label}{/if}</span>
 </label>
 

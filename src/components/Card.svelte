@@ -6,13 +6,19 @@
 	 * `pad={false}` for cards whose contents manage their own padding (a table,
 	 * a full-bleed image), which is otherwise inset by a ring nothing wanted.
 	 */
-	let { href, pad = true, children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { href, pad = true, children, class: klass = '', ...rest } = $props();
 </script>
 
 {#if href}
-	<a class="card link" class:pad {href} {...rest}>{@render children?.()}</a>
+	<a class="card link {klass}" class:pad {href} {...rest}>{@render children?.()}</a>
 {:else}
-	<div class="card" class:pad {...rest}>{@render children?.()}</div>
+	<div class="card {klass}" class:pad {...rest}>{@render children?.()}</div>
 {/if}
 
 <style>

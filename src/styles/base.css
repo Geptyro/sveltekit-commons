@@ -175,6 +175,104 @@ textarea::placeholder {
 	white-space: nowrap;
 }
 
+/* ── data table ──────────────────────────────────────────────────────── */
+
+/* One table treatment for every site: mono small-caps headers, hairline row
+   rules, values on tabular figures. Opt in with `class="data"` rather than
+   styling every <table>, because a table used for layout inside a card wants
+   none of this.
+
+   A global class and not a component: a table's markup is the page's business
+   — which columns, which cells span — and a component that owned the <table>
+   element would have to re-expose all of it as props. */
+table.data {
+	border-collapse: collapse;
+	width: 100%;
+	font-size: var(--text-sm);
+}
+
+table.data th {
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	text-align: left;
+	color: var(--text-faint);
+	background: var(--surface);
+	border-bottom: var(--border-width) solid var(--border-strong);
+	padding: var(--space-2) var(--space-3);
+}
+
+table.data td {
+	border-bottom: var(--border-width) solid var(--border);
+	padding: var(--space-2) var(--space-3);
+	vertical-align: top;
+}
+
+/* the last row sits on the card's own edge; a rule there doubles the border */
+table.data tr:last-child td {
+	border-bottom: none;
+}
+
+/* numbers line up under each other, and stay put as they change */
+table.data td.num,
+table.data th.num {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+table.data tbody tr {
+	transition: background 100ms ease;
+}
+
+table.data tbody tr:hover {
+	background: var(--surface-raised);
+}
+
+/* ── data page ───────────────────────────────────────────────────────── */
+
+/* A full-height listing: the toolbar and the table header stay put and only
+   the rows scroll, so the table reaches the bottom of the window instead of
+   floating above it. Heights come from the shell's own variables, so a site
+   that changes its chrome does not have to restate them here. */
+.datapage {
+	display: flex;
+	flex-direction: column;
+	height: calc(100dvh - var(--chrome-h, 52px) - var(--content-pad-top, 26px));
+	/* gives back the column's bottom padding: the last row ends on the window
+	   edge rather than above a strip of empty page */
+	margin-bottom: calc(-1 * var(--content-pad-bottom, 72px));
+}
+
+.datapage .dtools {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-4);
+	margin-bottom: var(--space-3);
+}
+
+/* whatever ends the toolbar — a pager, a count — holds the right end */
+.datapage .dtools .right {
+	margin-left: auto;
+}
+
+.datapage .rows {
+	flex: 1;
+	overflow: auto;
+	border: var(--border-width) solid var(--border);
+	border-radius: var(--radius-3);
+	background: var(--surface);
+}
+
+/* the header rides the scroller, so a long table keeps its column labels */
+.datapage .rows table.data thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

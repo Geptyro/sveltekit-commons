@@ -7,10 +7,16 @@
 	 * the column without anyone measuring it, and it stops next to the words
 	 * rather than running under them.
 	 */
-	let { children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { children, class: klass = '', ...rest } = $props();
 </script>
 
-<h2 class="section" {...rest}>{@render children?.()}</h2>
+<h2 class="section {klass}" {...rest}>{@render children?.()}</h2>
 
 <style>
 	.section {

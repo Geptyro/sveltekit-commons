@@ -5,10 +5,16 @@
 	 * `pressed` drives `aria-pressed`, so the accent-filled state and the state
 	 * a screen reader announces cannot drift apart: there is only one of them.
 	 */
-	let { pressed = false, children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { pressed = false, children, class: klass = '', ...rest } = $props();
 </script>
 
-<button class="chip" aria-pressed={pressed} {...rest}>{@render children?.()}</button>
+<button class="chip {klass}" aria-pressed={pressed} {...rest}>{@render children?.()}</button>
 
 <style>
 	.chip {

@@ -6,10 +6,16 @@
 	 * three-character heading still fits, and without it the second group of
 	 * icons has nothing to say what it is.
 	 */
-	let { children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { children, class: klass = '', ...rest } = $props();
 </script>
 
-<div class="section" {...rest}>{@render children?.()}</div>
+<div class="section {klass}" {...rest}>{@render children?.()}</div>
 
 <style>
 	.section {

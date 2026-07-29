@@ -7,13 +7,19 @@
 	 * status bar all keep working, which a <button> with an onclick throws
 	 * away.
 	 */
-	let { variant = 'solid', href, children, ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { variant = 'solid', href, children, class: klass = '', ...rest } = $props();
 </script>
 
 {#if href}
-	<a class="btn {variant}" {href} {...rest}>{@render children?.()}</a>
+	<a class="btn {variant} {klass}" {href} {...rest}>{@render children?.()}</a>
 {:else}
-	<button class="btn {variant}" {...rest}>{@render children?.()}</button>
+	<button class="btn {variant} {klass}" {...rest}>{@render children?.()}</button>
 {/if}
 
 <style>

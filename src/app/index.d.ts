@@ -1,5 +1,5 @@
 import type { Component, Snippet } from 'svelte';
-import type { HTMLAnchorAttributes } from 'svelte/elements';
+import type { FeedbackLimits } from '../../dist/feedback.js';
 
 /**
  * The SvelteKit-only half of the package: these reach for `$app/*`, so they
@@ -7,49 +7,48 @@ import type { HTMLAnchorAttributes } from 'svelte/elements';
  * usable from any Svelte app (the Electron companion consumes it).
  */
 
-export type AppShellProps = {
-	/** localStorage key for the remembered collapse, e.g. `sz:nav-open`. */
-	navKey?: string;
-	/** At or above this width the sidebar docks instead of overlaying. */
-	wideAt?: number;
-	/** Below this the `tools` snippet is asked to render compactly. */
-	compactAt?: number;
-	/** Accessible name for the sidebar's nav landmark. */
-	navLabel?: string;
-	/** The mark at the left of the top bar. */
-	brand?: Snippet;
-	/** The page heading area — the elastic item in the bar. */
-	crumb?: Snippet;
-	/** Top-right; receives whether the bar is short on room. */
-	tools?: Snippet<[boolean]>;
-	/** Sidebar body; receives a `close()` to call from a row's onclick. */
-	nav?: Snippet<[() => void]>;
-	/** Sidebar footer, pinned to the bottom. */
-	foot?: Snippet;
-	children?: Snippet;
-};
-export declare const AppShell: Component<AppShellProps>;
+/**
+ * The shell and the two nav components moved to the root entry (see the note
+ * in ./index.js) and are re-exported from there. The AppShell named here is
+ * the SvelteKit wrapper: same props, with afterNavigate already wired.
+ */
+export type { AppShellProps, NavItemProps, NavSectionProps } from '../index.d.ts';
+export { AppShell, NavItem, NavSection } from '../index.d.ts';
 
-export type NavItemProps = Omit<HTMLAnchorAttributes, 'children'> & {
-	href: string;
-	label: string;
-	/**
-	 * Defaults to `label` — collapsed to the rail the text is gone from the box
-	 * and from the accessibility tree with it, so a row would otherwise be an
-	 * unlabelled link. Pass one to say more than the label does.
-	 */
-	title?: string;
-	active?: boolean;
-	/** Tighter rows, for a long secondary list. */
-	dense?: boolean;
-	icon?: Snippet;
-	/** Right-aligned badge; hidden in the rail along with the label. */
-	trailing?: Snippet;
+export type FeedbackFormProps = {
+	/** The action's `ActionData`: `{ success }`, or `{ error, values }`. */
+	form?: {
+		success?: boolean;
+		error?: string;
+		values?: { message?: string; name?: string; contact?: string };
+	} | null;
+	limits?: FeedbackLimits;
+	/** Passed through to the `<form>`; default posts to the current route. */
+	action?: string;
+	messagePlaceholder?: string;
+	namePlaceholder?: string;
+	contactPlaceholder?: string;
+	sendLabel?: string;
+	successTitle?: string;
+	/** Where "send another" points. Defaults to the current path. */
+	againHref?: string;
+	/** Replaces the whole success card. */
+	success?: Snippet;
 };
-export declare const NavItem: Component<NavItemProps>;
-
-export type NavSectionProps = { children?: Snippet; [key: string]: unknown };
-export declare const NavSection: Component<NavSectionProps>;
+export declare const FeedbackForm: Component<FeedbackFormProps>;
 
 /** Thin accent bar across the top of AppShell's bar while a page loads. */
 export declare const NavProgress: Component<Record<string, never>>;
+
+/** Uses `$app/state` to read the current query, hence this entry. */
+export type PagerProps = {
+	page: number;
+	pages: number;
+	total: number;
+	/** Plural noun for the count; the singular drops a trailing s. */
+	label?: string;
+	/** Query parameter carrying the page number. */
+	param?: string;
+	[key: string]: unknown;
+};
+export declare const Pager: Component<PagerProps>;

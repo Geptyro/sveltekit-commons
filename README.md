@@ -109,19 +109,41 @@ dist/*.js + *.d.ts        generated from src/helpers — committed, never edited
 ```
 
 The root entry imports no `$app/*`, so it works in any Svelte app — the UAR
-Electron companion consumes it. Anything needing SvelteKit lives behind
-`sveltekit-commons/app`, which that companion never resolves.
+Electron companion consumes it, shell included. Anything that genuinely needs
+SvelteKit lives behind `sveltekit-commons/app`, which that companion never
+resolves.
+
+The split is load-bearing, not decorative: a single `$app/*` import anywhere
+reachable from the root entry fails the companion's build at bundle time, with
+an error naming the component rather than the entry. Adding a component that
+reads `page`, `navigating` or `afterNavigate` means putting it in `src/app/`.
 
 ## The shell
 
 ```js
+// SvelteKit: the wrapper wires afterNavigate for you
 import { AppShell, NavItem, NavSection, NavProgress } from 'sveltekit-commons/app';
+
+// anywhere else (the UAR Electron companion): same shell, no router
+import { AppShell, NavItem, NavSection } from 'sveltekit-commons';
 ```
 
-`AppShell` is the site frame: a top bar, a sidebar that collapses to an icon
+`AppShell` is the app frame: a top bar, a sidebar that collapses to an icon
 rail on wide screens and slides in as a drawer on narrow ones, and a scrolling
 content column. Everything site-specific arrives as a snippet — `brand`,
 `crumb`, `tools`, `nav`, `foot`.
+
+It lives on the **root** entry, so an app without SvelteKit gets the real
+shell rather than a copy of it. The one thing it cannot do for itself is
+notice a navigation started by a link inside the page; that is the `closeOn`
+prop — any change to the value closes an open drawer. The `AppShell` exported
+from `sveltekit-commons/app` is a wrapper that feeds it from `afterNavigate`,
+so SvelteKit callers pass nothing and nothing about their markup changes. An
+app with no router either bumps it from its own view state or leaves it alone
+and closes from the `close()` the `nav` snippet receives.
+
+`NavProgress` (and `Pager`) stay on `/app`: they read SvelteKit's navigation
+and page state, and there is no router-free version of that.
 
 The collapse is done entirely with custom properties: `.shell` declares the
 collapsed geometry and the two expanded states override it, so the rail width,
@@ -145,11 +167,63 @@ passes through a snippet — and does not need to, because the variables cascade
 this. A site sets `--brand-w` on `:root` so the shell can line the page heading
 up with the content column below it.
 
+## The feedback form
+
+```js
+import { FeedbackForm } from 'sveltekit-commons/app';
+import { readFeedbackForm, validateFeedback } from 'sveltekit-commons/feedback';
+import { rateLimiter } from 'sveltekit-commons/rate-limit';
+```
+
+Three pieces, because the fourth is not shareable. The component renders the
+fields, the honeypot and the failure states; `feedback` owns the rules; the
+limiter is the flood guard. **Storage stays in the site** — see
+[Server code](#server-code--read-before-adding-any) for why `mongodb` is not
+here.
+
+The field names are the seam, and they are why `readFeedbackForm` exists rather
+than each site pulling six values off `FormData` itself: this package renders
+the `name=` attributes, so renaming an input in the component would otherwise
+leave every consumer's action reading `undefined` — a form that accepts
+everything and stores nothing, with nothing anywhere to notice.
+
+A whole action is about twenty lines:
+
+```js
+const limiter = rateLimiter({ limit: 5, windowMs: 60 * 60 * 1000 });
+
+export const actions = {
+	default: async ({ request, getClientAddress }) => {
+		const form = await request.formData();
+		const { input, values } = readFeedbackForm(form);
+
+		const v = validateFeedback(input);
+		if (!v.ok) return fail(400, { error: v.error, values });
+		if (!limiter.allows(getClientAddress())) {
+			return fail(429, { error: 'Too many submissions.', values });
+		}
+
+		await insertFeedback(v.fields);   // the site's own db.ts
+		limiter.record(getClientAddress());
+		return { success: true };
+	}
+};
+```
+
+Note `allows` before the insert and `record` after it, rather than one combined
+call. Only *accepted* submissions are charged, so a bot tripping the honeypot
+cannot burn the budget of a real visitor sharing its address.
+
+The limiter is in memory. Both sites run one always-on machine, so a shared
+store would buy nothing but an outage surface — the trade is that a deploy or
+`fly apps restart` forgets every window. Fine for a spam guard, wrong for
+anything that has to actually hold.
+
 ## Helpers
 
-All pure, all import-free, so plain `node --test` loads them without a
-bundler's import chain — and so nothing here can drag a server dependency into
-a client bundle.
+Pure and import-free, so plain `node --test` loads them without a bundler's
+import chain — and so nothing here can drag a server dependency into a client
+bundle.
 
 ```js
 import { paginate, pageWindow, pageNumber, PER_PAGE } from 'sveltekit-commons/paging';
@@ -158,7 +232,14 @@ import { escapeRegex, foldForSearch, clampText } from 'sveltekit-commons/text';
 import { timeAgo } from 'sveltekit-commons/time';
 import { sitemapXml, sitemapDate, xmlEscape } from 'sveltekit-commons/sitemap';
 import { placeFloating } from 'sveltekit-commons/place';
+import { validateFeedback, readFeedbackForm } from 'sveltekit-commons/feedback';
+import { rateLimiter } from 'sveltekit-commons/rate-limit';
 ```
+
+`rate-limit` is the one that holds state, and the exception is bounded: nothing
+is created at module scope, `rateLimiter()` is a factory, and the Map belongs
+to the instance the caller made. Importing it allocates nothing and connects to
+nothing.
 
 `npm test` builds `dist/` and then covers them. `npm run check:dist` fails if
 the committed `dist/` has drifted from `src/helpers/`.

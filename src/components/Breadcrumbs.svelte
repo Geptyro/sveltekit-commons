@@ -9,11 +9,17 @@
 	 * the presentation rather than the accessibility tree: a reader announces
 	 * "Weapons, link" and not "slash Weapons slash link".
 	 */
-	let { trail = [], label = 'Breadcrumb', ...rest } = $props();
+	/* `class` is pulled out of the props and composed with the component's own,
+	   never left to `...rest`. A spread sets the attribute wholesale, so
+	   `<Card class="block">` used to render `class="block"` — the base class
+	   gone, and with it the surface, border and radius. Every consumer that
+	   styled a component from outside was silently unstyling it. */
+
+	let { trail = [], label = 'Breadcrumb', class: klass = '', ...rest } = $props();
 </script>
 
 {#if trail.length}
-	<nav class="crumbs" aria-label={label} {...rest}>
+	<nav class="crumbs {klass}" aria-label={label} {...rest}>
 		<ol>
 			{#each trail as crumb, i (crumb.href ?? crumb.label)}
 				<li>
