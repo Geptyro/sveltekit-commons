@@ -21,6 +21,13 @@ export function escapeRegex(term) {
 
 /**
  * Fold accents and case, so "Détecteur" matches a search for "detecteur".
+ *
+ * The trailing NFC is not decoration. NFD decomposes Hangul syllables into
+ * their jamo as readily as it separates a French acute, and stripping
+ * diacritics leaves those jamo behind — so "서지" folded to something that no
+ * longer equalled itself, and any caller comparing folded text against text
+ * that had not been folded silently stopped matching Korean.
+ *
  * @param {string} s
  * @returns {string}
  */
@@ -28,6 +35,7 @@ export function foldForSearch(s) {
 	return s
 		.normalize('NFD')
 		.replace(/\p{Diacritic}/gu, '')
+		.normalize('NFC')
 		.toLowerCase();
 }
 
