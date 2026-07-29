@@ -1,6 +1,6 @@
 {
 	"name": "sveltekit-commons",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Design-token contract, Svelte 5 primitives and dependency-free helpers shared across SvelteKit sites",
 	"type": "module",
 	"license": "MIT",
@@ -10,6 +10,11 @@
 			"types": "./src/index.d.ts",
 			"svelte": "./src/index.js",
 			"default": "./src/index.js"
+		},
+		"./app": {
+			"types": "./src/app/index.d.ts",
+			"svelte": "./src/app/index.js",
+			"default": "./src/app/index.js"
 		},
 		"./tokens.css": "./src/styles/tokens.css",
 		"./base.css": "./src/styles/base.css",
@@ -48,9 +53,15 @@
 		"test": "npm run build && node --test \"tests/**/*.test.ts\""
 	},
 	"peerDependencies": {
-		"svelte": "^5.0.0"
+		"svelte": "^5.0.0",
+		"@sveltejs/kit": "^2.0.0"
 	},
 	"devDependencies": {
 		"typescript": "^6.0.3"
+	},
+	"peerDependenciesMeta": {
+		"@sveltejs/kit": {
+			"optional": true
+		}
 	}
 }

@@ -101,11 +101,49 @@ and the components stand alone.
 ## Layout
 
 ```
-src/components/*.svelte   shipped as source, compiled by the consumer
+src/components/*.svelte   framework-agnostic primitives
+src/app/*.svelte          the SvelteKit-only half (imports $app/*)
 src/styles/*.css          tokens.css (contract) and base.css (reset)
 src/helpers/*.ts          the source of truth for the helpers
 dist/*.js + *.d.ts        generated from src/helpers — committed, never edited
 ```
+
+The root entry imports no `$app/*`, so it works in any Svelte app — the UAR
+Electron companion consumes it. Anything needing SvelteKit lives behind
+`sveltekit-commons/app`, which that companion never resolves.
+
+## The shell
+
+```js
+import { AppShell, NavItem, NavSection, NavProgress } from 'sveltekit-commons/app';
+```
+
+`AppShell` is the site frame: a top bar, a sidebar that collapses to an icon
+rail on wide screens and slides in as a drawer on narrow ones, and a scrolling
+content column. Everything site-specific arrives as a snippet — `brand`,
+`crumb`, `tools`, `nav`, `foot`.
+
+The collapse is done entirely with custom properties: `.shell` declares the
+collapsed geometry and the two expanded states override it, so the rail width,
+the label visibility, the icon size and the burger's own glyph all read the
+same variables and transition together. Nothing toggles a class per row and
+nothing measures anything.
+
+That is also what makes it work as a package. Svelte scopes styles to the
+component that declares the markup, so `AppShell` cannot style what a caller
+passes through a snippet — and does not need to, because the variables cascade:
+
+| variable | |
+|---|---|
+| `--label-display` | `none` in the rail, `block` expanded — put it on anything that should fold away |
+| `--nav-slot` / `--nav-glyph` | icon column width / icon size |
+| `--nav-pad-x` / `--nav-pad-y` / `--nav-justify` | row padding and alignment |
+| `--label-align` | alignment for group headings |
+| `--foot-dir` | footer stacking direction |
+
+`NavItem` and `NavSection` already read them, so the common cases need none of
+this. A site sets `--brand-w` on `:root` so the shell can line the page heading
+up with the content column below it.
 
 ## Helpers
 
