@@ -1,0 +1,93 @@
+/*
+ * LAYER 1 — the contract.
+ *
+ * The scale, rhythm and shape every site built on sveltekit-commons shares.
+ * Deliberately colourless: this file names no palette value, because "same
+ * design language, distinct identity" is exactly the split between what is
+ * here and what each site defines for itself. Two sites that shared the
+ * colours too would just be the same site twice.
+ *
+ * Components in this package reference ONLY the names below plus the palette
+ * names listed underneath. A component that reaches for a raw colour, or for a
+ * token a host happens to define, is a bug — it will render wrong on the next
+ * site that adopts it.
+ *
+ * ── The palette a host MUST define (LAYER 2, in the site) ─────────────────
+ *
+ *   surfaces   --bg  --surface  --surface-raised  --surface-sunken
+ *   lines      --border  --border-strong
+ *   text       --text  --text-dim  --text-faint
+ *   accent     --accent  --accent-dim  --accent-contrast
+ *   status     --danger  --warn  --ok
+ *
+ * `--accent-dim` is the hover/pressed accent. Which direction "dim" runs is
+ * the palette's call — darker on a light skin, often lighter on a dark one —
+ * because the only requirement is that it reads as a state change.
+ *
+ * ── Import order ─────────────────────────────────────────────────────────
+ *
+ *   import 'sveltekit-commons/tokens.css';  // this file: the contract
+ *   import '$lib/styles/palette.css';       // the site's skin + any overrides
+ *   import 'sveltekit-commons/base.css';    // reset and element styles
+ *
+ * The palette goes second on purpose. Every default here is a plain `:root`
+ * declaration, so a site that wants its own type scale or fonts overrides them
+ * from the same specificity simply by coming later. base.css deliberately does
+ * not @import this file — that would hoist the contract back above the palette
+ * and silently undo those overrides.
+ */
+
+:root {
+	color-scheme: light dark;
+
+	/* ── spacing ─────────────────────────────────────────────────────── */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 3rem;
+
+	/* ── shape ───────────────────────────────────────────────────────── */
+	--radius-1: 2px;
+	--radius-2: 4px;
+	--radius-3: 8px;
+	--border-width: 1px;
+
+	/* ── type ────────────────────────────────────────────────────────── */
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-base: 0.9375rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.5rem;
+	--text-2xl: 2rem;
+
+	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+	/* ── derived from the palette ────────────────────────────────────── */
+
+	/* A wash of the accent, for tinted backgrounds and focus haloes. Derived
+	   rather than declared so a site picks one accent and gets the pair. */
+	--accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+	--focus-ring: 2px solid var(--accent);
+
+	/* Neutral defaults — a dark skin usually wants these heavier, so palettes
+	   override. Expressed in black rather than a token because a shadow is
+	   absence of light, not a colour from the scheme. */
+	--shadow-1: 0 1px 2px rgb(0 0 0 / 0.08);
+	--shadow-2: 0 2px 10px rgb(0 0 0 / 0.14);
+
+	/* ── layering ────────────────────────────────────────────────────── */
+
+	/* Floating cards (HoverPop, tooltips) sit here. A host with fixed chrome
+	   of its own raises it above that chrome; the default clears ordinary
+	   in-flow content and nothing else. */
+	--z-float: 60;
+
+	/* Height of any fixed chrome at the top of the viewport. Floating cards
+	   subtract it when sizing themselves, so they never grow behind a header
+	   they cannot scroll out from under. Hosts with no fixed chrome leave it. */
+	--chrome-h: 0px;
+}

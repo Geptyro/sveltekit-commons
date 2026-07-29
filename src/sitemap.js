@@ -1,0 +1,60 @@
+/**
+ * Sitemap XML. Import-free so a plain `node --test` can load it — the route
+ * gathers the paths, this only serialises them.
+ */
+
+/** @type {Record<string, string>} */
+const ESCAPE = {
+	'&': '&amp;',
+	'<': '&lt;',
+	'>': '&gt;',
+	'"': '&quot;',
+	"'": '&apos;'
+};
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+export function xmlEscape(s) {
+	return s.replace(/[&<>"']/g, (c) => ESCAPE[c]);
+}
+
+/**
+ * @param {string} origin  absolute, no trailing slash
+ * @param {import('./sitemap.d.ts').SitemapUrl[]} urls
+ * @returns {string}
+ */
+export function sitemapXml(origin, urls) {
+	const entries = urls.map((u) => {
+		const lines = [`\t\t<loc>${xmlEscape(origin + u.path)}</loc>`];
+		if (u.lastmod) lines.push(`\t\t<lastmod>${xmlEscape(u.lastmod)}</lastmod>`);
+		if (u.priority !== undefined) lines.push(`\t\t<priority>${u.priority.toFixed(1)}</priority>`);
+		return `\t<url>\n${lines.join('\n')}\n\t</url>`;
+	});
+	return (
+		'<?xml version="1.0" encoding="UTF-8"?>\n' +
+		'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+		entries.join('\n') +
+		'\n</urlset>\n'
+	);
+}
+
+/**
+ * `lastmod` wants a date; records usually carry a full timestamp.
+ *
+ * Taken off the front of the string rather than through `Date`: stored values
+ * often carry no zone ("2026-07-27T17:37:49"), so Date reads them as local time
+ * and toISOString then converts to UTC — which moves the day for anything
+ * recorded near midnight.
+ *
+ * @param {string | undefined | null} iso
+ * @returns {string | undefined}
+ */
+export function sitemapDate(iso) {
+	if (!iso) return undefined;
+	const day = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
+	if (day) return day[1];
+	const d = new Date(iso);
+	return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
+}

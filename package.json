@@ -1,0 +1,50 @@
+{
+	"name": "sveltekit-commons",
+	"version": "0.1.0",
+	"description": "Design-token contract, Svelte 5 primitives and dependency-free helpers shared across SvelteKit sites",
+	"type": "module",
+	"license": "MIT",
+	"svelte": "./src/index.js",
+	"exports": {
+		".": {
+			"types": "./src/index.d.ts",
+			"svelte": "./src/index.js",
+			"default": "./src/index.js"
+		},
+		"./tokens.css": "./src/tokens.css",
+		"./base.css": "./src/base.css",
+		"./place": {
+			"types": "./src/place.d.ts",
+			"default": "./src/place.js"
+		},
+		"./paging": {
+			"types": "./src/paging.d.ts",
+			"default": "./src/paging.js"
+		},
+		"./cache": {
+			"types": "./src/cache.d.ts",
+			"default": "./src/cache.js"
+		},
+		"./text": {
+			"types": "./src/text.d.ts",
+			"default": "./src/text.js"
+		},
+		"./time": {
+			"types": "./src/time.d.ts",
+			"default": "./src/time.js"
+		},
+		"./sitemap": {
+			"types": "./src/sitemap.d.ts",
+			"default": "./src/sitemap.js"
+		}
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"test": "node --test \"tests/**/*.test.js\""
+	},
+	"peerDependencies": {
+		"svelte": "^5.0.0"
+	}
+}
