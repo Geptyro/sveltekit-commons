@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { timeAgo } from '../src/time.js';
+import { timeAgo } from '../src/helpers/time.ts';
 
 const NOW = Date.parse('2026-07-29T12:00:00Z');
 /** an ISO stamp `secs` before NOW */

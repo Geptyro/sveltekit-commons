@@ -4,9 +4,10 @@ Design-token contract, Svelte 5 primitives and dependency-free helpers shared
 across [uar.cedricdessalles.dev](https://uar.cedricdessalles.dev), STALZONE db
 and the Guild Wars sites.
 
-Ships as source — no build step. Consumers compile it with their own
-`vite-plugin-svelte`, the same arrangement `uar-shared`, `grid-router` and
-`panels-layout` use.
+Components and styles ship as source, compiled by the consumer's own
+`vite-plugin-svelte` — the same arrangement `uar-shared`, `grid-router` and
+`panels-layout` use. The helpers are TypeScript, compiled to a committed
+`dist/`. See [Why dist/ is committed](#why-dist-is-committed).
 
 ```bash
 npm i github:Geptyro/sveltekit-commons
@@ -91,6 +92,15 @@ and the components stand alone.
   hang off a phone's edge. Contents stay interactive — it is a menu, not a
   tooltip.
 
+## Layout
+
+```
+src/components/*.svelte   shipped as source, compiled by the consumer
+src/styles/*.css          tokens.css (contract) and base.css (reset)
+src/helpers/*.ts          the source of truth for the helpers
+dist/*.js + *.d.ts        generated from src/helpers — committed, never edited
+```
+
 ## Helpers
 
 All pure, all import-free, so plain `node --test` loads them without a
@@ -106,7 +116,46 @@ import { sitemapXml, sitemapDate, xmlEscape } from 'sveltekit-commons/sitemap';
 import { placeFloating } from 'sveltekit-commons/place';
 ```
 
-`npm test` covers them.
+`npm test` builds `dist/` and then covers them. `npm run check:dist` fails if
+the committed `dist/` has drifted from `src/helpers/`.
+
+## Why `dist/` is committed
+
+Because the alternative breaks the consumers, and it is worth writing down
+before someone deletes it.
+
+The helpers are TypeScript. Every consumer that goes through Vite — both
+SvelteKit sites, the electron-vite companion — could happily transpile raw
+`.ts` from `node_modules`. But some consumer entrypoints never touch Vite:
+
+```
+node --env-file=.env scripts/list-feedback.ts     # and 4 more in UAR
+node --test "tests/**/*.test.ts"
+```
+
+Those load the site's own `$lib/server/db.ts`, which imports
+`sveltekit-commons/paging`, `/cache` and `/text`. Node refuses to strip types
+inside `node_modules`:
+
+```
+ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
+```
+
+That is unconditional — neither `--experimental-strip-types` nor
+`--experimental-transform-types` lifts it, and it applies to `node_modules`
+specifically. TypeScript in a consumer's *own* tree is fine: UAR's `src/lib`
+and all 185 of its tests are `.ts`, and plain `node --test` loads them today.
+The restriction only bites at the package boundary.
+
+The one consumer-side fix is a loader — `node --import tsx script.ts` — in all
+three repos. That works, but it puts a transpiler in front of every CLI
+invocation in exchange for deleting a build step from one package.
+
+A normal npm package compiles on publish. This one is installed as a git
+dependency, so there is no publish step — the build would have to run from
+`prepare` on every consumer install, which is the install-script fragility this
+project has already been bitten by. Committing `dist/` is what is left, and
+`check:dist` is what keeps it honest.
 
 ## Server code — read before adding any
 

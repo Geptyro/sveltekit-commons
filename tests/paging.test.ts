@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { paginate, pageNumber, pageWindow } from '../src/paging.js';
+import { paginate, pageNumber, pageWindow } from '../src/helpers/paging.ts';
 
 const rows = Array.from({ length: 120 }, (_, i) => i + 1);
 

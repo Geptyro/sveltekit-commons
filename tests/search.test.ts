@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { escapeRegex } from '../src/text.js';
+import { escapeRegex } from '../src/helpers/text.ts';
 
 test('regex metacharacters survive as literals', () => {
 	// a real clan tag on the site is non-ASCII; punctuation in names is common

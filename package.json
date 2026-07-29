@@ -1,6 +1,6 @@
 {
 	"name": "sveltekit-commons",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Design-token contract, Svelte 5 primitives and dependency-free helpers shared across SvelteKit sites",
 	"type": "module",
 	"license": "MIT",
@@ -11,40 +11,46 @@
 			"svelte": "./src/index.js",
 			"default": "./src/index.js"
 		},
-		"./tokens.css": "./src/tokens.css",
-		"./base.css": "./src/base.css",
+		"./tokens.css": "./src/styles/tokens.css",
+		"./base.css": "./src/styles/base.css",
 		"./place": {
-			"types": "./src/place.d.ts",
-			"default": "./src/place.js"
+			"types": "./dist/place.d.ts",
+			"default": "./dist/place.js"
 		},
 		"./paging": {
-			"types": "./src/paging.d.ts",
-			"default": "./src/paging.js"
+			"types": "./dist/paging.d.ts",
+			"default": "./dist/paging.js"
 		},
 		"./cache": {
-			"types": "./src/cache.d.ts",
-			"default": "./src/cache.js"
+			"types": "./dist/cache.d.ts",
+			"default": "./dist/cache.js"
 		},
 		"./text": {
-			"types": "./src/text.d.ts",
-			"default": "./src/text.js"
+			"types": "./dist/text.d.ts",
+			"default": "./dist/text.js"
 		},
 		"./time": {
-			"types": "./src/time.d.ts",
-			"default": "./src/time.js"
+			"types": "./dist/time.d.ts",
+			"default": "./dist/time.js"
 		},
 		"./sitemap": {
-			"types": "./src/sitemap.d.ts",
-			"default": "./src/sitemap.js"
+			"types": "./dist/sitemap.d.ts",
+			"default": "./dist/sitemap.js"
 		}
 	},
 	"files": [
-		"src"
+		"src",
+		"dist"
 	],
 	"scripts": {
-		"test": "node --test \"tests/**/*.test.js\""
+		"build": "tsc -p tsconfig.json",
+		"check:dist": "tsc -p tsconfig.json --outDir .dist-check && diff -r dist .dist-check && rm -rf .dist-check",
+		"test": "npm run build && node --test \"tests/**/*.test.ts\""
 	},
 	"peerDependencies": {
 		"svelte": "^5.0.0"
+	},
+	"devDependencies": {
+		"typescript": "^6.0.3"
 	}
 }

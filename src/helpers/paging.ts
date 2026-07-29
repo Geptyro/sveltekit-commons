@@ -6,26 +6,22 @@
 
 export const PER_PAGE = 50;
 
-/**
- * Clamps a `?page` value from a URL to something that exists.
- * @param {string | null} raw
- * @param {number} pages
- * @returns {number}
- */
-export function pageNumber(raw, pages) {
+export interface Paged<T> {
+	rows: T[];
+	page: number;
+	pages: number;
+	total: number;
+	perPage: number;
+}
+
+/** Clamps a `?page` value from a URL to something that exists. */
+export function pageNumber(raw: string | null, pages: number): number {
 	const n = Number(raw);
 	if (!Number.isFinite(n) || n < 1) return 1;
 	return Math.min(Math.floor(n), Math.max(1, pages));
 }
 
-/**
- * @template T
- * @param {T[]} all
- * @param {string | null} rawPage
- * @param {number} [perPage]
- * @returns {import('./paging.d.ts').Paged<T>}
- */
-export function paginate(all, rawPage, perPage = PER_PAGE) {
+export function paginate<T>(all: T[], rawPage: string | null, perPage = PER_PAGE): Paged<T> {
 	const total = all.length;
 	const pages = Math.max(1, Math.ceil(total / perPage));
 	const page = pageNumber(rawPage, pages);
@@ -35,18 +31,15 @@ export function paginate(all, rawPage, perPage = PER_PAGE) {
 /**
  * Page numbers to show around the current one, with nulls marking gaps:
  * `1 … 4 5 [6] 7 8 … 20`
- * @param {number} page
- * @param {number} pages
- * @param {number} [span]  how many neighbours either side of the current page
- * @returns {(number | null)[]}
+ *
+ * @param span how many neighbours to keep either side of the current page
  */
-export function pageWindow(page, pages, span = 2) {
+export function pageWindow(page: number, pages: number, span = 2): (number | null)[] {
 	if (pages <= 1) return [1];
-	const wanted = new Set([1, pages]);
+	const wanted = new Set<number>([1, pages]);
 	for (let p = page - span; p <= page + span; p++) if (p >= 1 && p <= pages) wanted.add(p);
 	const sorted = [...wanted].sort((a, b) => a - b);
-	/** @type {(number | null)[]} */
-	const out = [];
+	const out: (number | null)[] = [];
 	let previous = 0;
 	for (const p of sorted) {
 		if (previous && p - previous > 1) out.push(null);

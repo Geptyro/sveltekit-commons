@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cacheState, cacheKeyMatches } from '../src/cache.js';
+import { cacheState, cacheKeyMatches } from '../src/helpers/cache.ts';
 
 const MIN = 60_000;
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeFloating } from '../src/place.js';
+import { placeFloating } from '../src/helpers/place.ts';
 
 /** anchor rect helper — x/y/width/height in, DOMRect-shaped out */
 function rect(left, top, width, height) {

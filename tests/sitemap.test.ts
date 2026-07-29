@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sitemapDate, sitemapXml, xmlEscape } from '../src/sitemap.js';
+import { sitemapDate, sitemapXml, xmlEscape } from '../src/helpers/sitemap.ts';
 
 const ORIGIN = 'https://uar.cedricdessalles.dev';
 

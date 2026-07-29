@@ -10,7 +10,7 @@
 	 * menu, not a tooltip — so the pointer may travel from trigger to card
 	 * across the gap without it closing.
 	 */
-	import { placeFloating } from '../place.js';
+	import { placeFloating } from '../../dist/place.js';
 
 	/** `disabled`: render the trigger alone (nothing to drop down). */
 	let { heading, trigger, children, disabled = false, align = 'end' } = $props();

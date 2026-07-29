@@ -3,8 +3,16 @@
  * gathers the paths, this only serialises them.
  */
 
-/** @type {Record<string, string>} */
-const ESCAPE = {
+export interface SitemapUrl {
+	/** Root-relative, leading slash, already percent-encoded. */
+	path: string;
+	/** ISO date the page last changed, where it is known. */
+	lastmod?: string;
+	/** 0..1, relative to the rest of this sitemap only. */
+	priority?: number;
+}
+
+const ESCAPE: Record<string, string> = {
 	'&': '&amp;',
 	'<': '&lt;',
 	'>': '&gt;',
@@ -12,20 +20,12 @@ const ESCAPE = {
 	"'": '&apos;'
 };
 
-/**
- * @param {string} s
- * @returns {string}
- */
-export function xmlEscape(s) {
+export function xmlEscape(s: string): string {
 	return s.replace(/[&<>"']/g, (c) => ESCAPE[c]);
 }
 
-/**
- * @param {string} origin  absolute, no trailing slash
- * @param {import('./sitemap.d.ts').SitemapUrl[]} urls
- * @returns {string}
- */
-export function sitemapXml(origin, urls) {
+/** @param origin absolute, no trailing slash */
+export function sitemapXml(origin: string, urls: SitemapUrl[]): string {
 	const entries = urls.map((u) => {
 		const lines = [`\t\t<loc>${xmlEscape(origin + u.path)}</loc>`];
 		if (u.lastmod) lines.push(`\t\t<lastmod>${xmlEscape(u.lastmod)}</lastmod>`);
@@ -47,11 +47,8 @@ export function sitemapXml(origin, urls) {
  * often carry no zone ("2026-07-27T17:37:49"), so Date reads them as local time
  * and toISOString then converts to UTC — which moves the day for anything
  * recorded near midnight.
- *
- * @param {string | undefined | null} iso
- * @returns {string | undefined}
  */
-export function sitemapDate(iso) {
+export function sitemapDate(iso: string | undefined | null): string | undefined {
 	if (!iso) return undefined;
 	const day = /^(\d{4}-\d{2}-\d{2})/.exec(iso);
 	if (day) return day[1];

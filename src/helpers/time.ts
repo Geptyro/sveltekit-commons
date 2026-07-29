@@ -18,11 +18,9 @@ const MAX_DAYS = 35;
  * Returns null once something is old enough that "5w ago" stops meaning
  * anything useful — the caller shows the date instead.
  *
- * @param {string} iso
- * @param {number} now  ms since epoch
- * @returns {string | null}
+ * @param now ms since epoch
  */
-export function timeAgo(iso, now) {
+export function timeAgo(iso: string, now: number): string | null {
 	const then = Date.parse(iso);
 	if (!Number.isFinite(then)) return null;
 	// a clock skewed a little ahead of the server should read "just now",

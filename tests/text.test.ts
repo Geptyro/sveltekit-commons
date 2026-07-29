@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DESC_MAX, clampText, foldForSearch } from '../src/text.js';
+import { DESC_MAX, clampText, foldForSearch } from '../src/helpers/text.ts';
 
 test('foldForSearch strips accents and case', () => {
 	// the case this exists for: a French item name typed without its accents
