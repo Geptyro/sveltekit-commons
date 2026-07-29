@@ -9,6 +9,21 @@ import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements
 
 type WithChildren<T> = T & { children?: Snippet };
 
+export interface Crumb {
+	label: string;
+	/** Omitted on the last entry, which renders as text. */
+	href?: string;
+}
+
+export type BreadcrumbsProps = {
+	/** Root-first; the last entry is the current page. */
+	trail?: Crumb[];
+	/** aria-label for the nav landmark. */
+	label?: string;
+	[key: string]: unknown;
+};
+export declare const Breadcrumbs: Component<BreadcrumbsProps>;
+
 export type ButtonProps = WithChildren<
 	Omit<HTMLButtonAttributes & HTMLAnchorAttributes, 'children'> & {
 		variant?: 'solid' | 'ghost' | 'danger';

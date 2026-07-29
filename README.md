@@ -62,7 +62,9 @@ silently undo those overrides.
 ## Components
 
 ```js
-import { Button, Card, Chip, Tag, Toggle, SectionHeading, HoverPop } from 'sveltekit-commons';
+import {
+	Breadcrumbs, Button, Card, Chip, HoverPop, SectionHeading, Tag, Toggle
+} from 'sveltekit-commons';
 ```
 
 Every one carries its own scoped styles and references only contract tokens.
@@ -73,6 +75,10 @@ components whose styling only arrives if you also adopt a stylesheet that
 restyles your `<a>`, `<body>` and form controls — so `base.css` is now optional
 and the components stand alone.
 
+- **`Breadcrumbs`** — `trail` root-first. The last entry renders as text with
+  `aria-current`, not a link: a crumb pointing at the page you are on is noise
+  to a mouse and a trap to a screen reader. Separators are `::before` content,
+  so a reader announces "Weapons, link" rather than "slash Weapons slash link".
 - **`Button`** — `variant="solid" | "ghost" | "danger"`. Given an `href` it
   renders an `<a>`, so a link that looks like a button still middle-clicks and
   opens in a new tab.
