@@ -24,6 +24,11 @@
  * the palette's call — darker on a light skin, often lighter on a dark one —
  * because the only requirement is that it reads as a state change.
  *
+ * `raised` and `sunken` mean elevation, not lightness. A raised surface is one
+ * step further from the page than `--surface`; on a light skin that is usually
+ * a shade *darker*, not lighter, and both skins built on this do exactly that.
+ * Tying the names to lightness would make them lie in one theme or the other.
+ *
  * ── Import order ─────────────────────────────────────────────────────────
  *
  *   import 'sveltekit-commons/tokens.css';  // this file: the contract
@@ -50,9 +55,13 @@
 	--space-7: 3rem;
 
 	/* ── shape ───────────────────────────────────────────────────────── */
+	/* Four steps, because three was one short: hairlines, controls, cards and
+	   the largest panels are genuinely four different corners on both skins.
+	   Components use --radius-2 for controls and --radius-3 for cards. */
 	--radius-1: 2px;
 	--radius-2: 4px;
 	--radius-3: 8px;
+	--radius-4: 12px;
 	--border-width: 1px;
 
 	/* ── type ────────────────────────────────────────────────────────── */

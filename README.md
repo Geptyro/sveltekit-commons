@@ -36,7 +36,11 @@ A site must define these, or components render wrong:
 lighter is the palette's call — the only requirement is that it reads as a
 state change.
 
-Everything else (`--space-1..7`, `--radius-1..3`, `--text-xs..2xl`,
+`raised` and `sunken` mean **elevation, not lightness**. A raised surface is a
+step further from the page than `--surface`; on a light skin that is usually a
+shade darker, and both skins built on this do exactly that.
+
+Everything else (`--space-1..7`, `--radius-1..4`, `--text-xs..2xl`,
 `--font-sans`, `--font-mono`, `--border-width`, `--focus-ring`, `--accent-soft`,
 `--shadow-1`, `--shadow-2`, `--z-float`, `--chrome-h`) comes from
 `tokens.css` and can be overridden from the palette.
