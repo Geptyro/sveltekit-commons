@@ -29,7 +29,7 @@
 	 *   --nav-slot        icon column width      --nav-glyph  icon size
 	 *   --nav-pad-x/y     row padding            --nav-justify  row alignment
 	 *   --label-align     alignment for group headings
-	 *   --foot-dir        footer stacking direction
+	 *   --foot-dir        footer stacking direction (column; a site may override)
 	 *
 	 * NavItem and NavSection already read them, so the common cases need none
 	 * of this.
@@ -201,7 +201,11 @@
 		--nav-pad-x: 0px;
 		--nav-pad-y: 5px;
 		--label-align: center;
-		--foot-dir: row;
+		/* Stacked in both states. Side by side reads better in the rail and was
+		   the original choice, but it only fit while the footer had two marks —
+		   a third (the tip link) ran it off the 42px of usable width a 58px rail
+		   has. A column cannot overflow however many links a site puts there. */
+		--foot-dir: column;
 		--side-scrollbar: none;
 		/* with no labels to line up against, the icons take the room back */
 		--nav-slot: 28px;
@@ -224,7 +228,6 @@
 			--nav-pad-x: 10px;
 			--nav-pad-y: 7px;
 			--label-align: left;
-			--foot-dir: column;
 			--side-scrollbar: thin;
 			--nav-slot: 22px;
 			--nav-glyph: 16px;
@@ -248,7 +251,6 @@
 			--nav-pad-x: 10px;
 			--nav-pad-y: 7px;
 			--label-align: left;
-			--foot-dir: column;
 			--side-scrollbar: thin;
 			--nav-slot: 22px;
 			--nav-glyph: 16px;
