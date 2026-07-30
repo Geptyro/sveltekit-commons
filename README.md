@@ -63,7 +63,8 @@ silently undo those overrides.
 
 ```js
 import {
-	Breadcrumbs, Button, Card, Chip, HoverPop, SectionHeading, Tag, Toggle
+	Breadcrumbs, Button, Card, ChangeChip, Chip, HoverPop, SearchChip,
+	SearchDialog, SectionHeading, Tag, Toggle, WhatsNew
 } from 'sveltekit-commons';
 ```
 
@@ -93,10 +94,71 @@ and the components stand alone.
 - **`Toggle`** — labelled switch over a real checkbox, so the label, keyboard
   behaviour and `:checked` state come for free.
 - **`SectionHeading`** — mono small-caps with a rule to the right margin.
+- **`ChangeChip`** — the kind of a changelog entry as a pill. Its tint is
+  derived from the type alone — `var(--change-<type>)`, falling back to
+  `--text-dim` — so a caller can loop over entries without carrying a colour map
+  beside them. Declare the colours once in the site's palette.
+- **`WhatsNew`** — the latest release as a rail card: headlines only, `minor`
+  entries filtered out, footer link to the full changelog. Takes a
+  `ChangelogRelease` straight from `sveltekit-commons/changelog`.
 - **`HoverPop`** — hover/focus with a mouse, tap with a finger. `position:fixed`
   and placed by `placeFloating`, so it escapes clipping ancestors and cannot
   hang off a phone's edge. Contents stay interactive — it is a menu, not a
   tooltip.
+
+## Search
+
+```svelte
+<script>
+	import { SearchChip, SearchDialog } from 'sveltekit-commons';
+	import { isSearchShortcut, rankRows } from 'sveltekit-commons/palette';
+
+	let palette = $state(null);
+	let query = $state('');
+
+	const groups = $derived([{ rows: rankRows(rows, query) }]);
+</script>
+
+<svelte:window onkeydown={(e) => {
+	if (!isSearchShortcut(e)) return;
+	e.preventDefault();
+	palette.open();
+}} />
+
+<SearchDialog bind:this={palette} bind:query {groups} onselect={(r) => goto(r.href)} />
+<SearchChip onopen={() => palette.open()} />
+```
+
+- **`SearchChip`** — the top bar's way in. The shortcuts are the fast path but
+  they are invisible, and a phone has no keyboard to press them on, so the
+  palette gets a control you can see and tap. `compact` drops to the magnifier
+  alone; the modifier is resolved on mount, never during render, because a
+  prerendered layout is built on a machine that is nobody's.
+- **`SearchDialog`** — the palette itself: a native `<dialog>`, so `showModal()`
+  gives focus trapping, `inert` for the rest of the page, Esc, the top layer and
+  `::backdrop` rather than a div reimplementing all five badly. It owns the
+  chrome, the cursor and the keys; the caller owns where rows come from.
+
+  `groups` is drawn in order and flattened into one cursor, so ↑/↓ walks through
+  a heading rather than stopping at it. A group whose rows are still being
+  fetched sets `busy` and gets a spinner on its heading — that is how the half
+  of a palette that cannot answer instantly reads as *coming* rather than
+  *absent*. `query` is bindable: it is the site's cue to go and fetch.
+
+`sveltekit-commons/palette` is the matching dependency-free half — `PaletteRow`,
+`RowGroup`, `rankRows`, `flattenGroups`, `step`, `isSearchShortcut`, `modKey`.
+
+`rankRows` scores a prefix above a word start above a match in the middle, and
+falls back to aliases below all three, so a map-internal id still finds the unit
+it names without outranking the name a reader typed. Ties break on `row.weight`
+(a destination is one keystroke from everything under it, so give it a lower
+one), then on label length: someone typing "sniper" means Sniper, not "Sniper
+Rifle Ammo Crate".
+
+`isSearchShortcut` is the binding set the chip advertises — Ctrl/Cmd+F,
+Ctrl/Cmd+K and "/" — with "/" ignored while the visitor is typing somewhere
+else. Keeping it here is what stops two sites drifting on which keys open
+search.
 
 ## Layout
 
@@ -228,12 +290,38 @@ bundle.
 ```js
 import { paginate, pageWindow, pageNumber, PER_PAGE } from 'sveltekit-commons/paging';
 import { cacheState, cacheKeyMatches } from 'sveltekit-commons/cache';
+import { buildChangelog, latestVersionInfo, parseEntry } from 'sveltekit-commons/changelog';
 import { escapeRegex, foldForSearch, clampText } from 'sveltekit-commons/text';
 import { timeAgo } from 'sveltekit-commons/time';
 import { sitemapXml, sitemapDate, xmlEscape } from 'sveltekit-commons/sitemap';
 import { placeFloating } from 'sveltekit-commons/place';
 import { validateFeedback, readFeedbackForm } from 'sveltekit-commons/feedback';
 import { rateLimiter } from 'sveltekit-commons/rate-limit';
+import { rankRows, step, isSearchShortcut, modKey } from 'sveltekit-commons/palette';
+```
+
+`palette` is the one that imports another helper (`text`, for the fold). Its
+source says `./text.ts` rather than `./text.js`, because `npm test` runs these
+sources directly under Node, which resolves an extension literally and would not
+find a file that only exists after a build; `rewriteRelativeImportExtensions`
+turns it into `./text.js` on the way into `dist/`.
+
+`changelog` is the convention as well as the parser: one markdown file per
+user-visible change under `changelog/vX.Y.Z/`, with `title` / `type` / `area` /
+optional `impact` frontmatter. `impact` (`major` | `normal` | `minor`) is fixed
+here because every site has a flagship change and a change nobody would notice.
+`type` and `area` are not — they come in as an ordered `ChangelogSchema`, and
+that order is the display order. Pass the lists `as const` and the string-literal
+unions come back out through the generics, so a site keeps its own types instead
+of widening to `string`:
+
+```ts
+const SCHEMA = {
+	types: ['feature', 'improvement', 'fix', 'data'],
+	areas: ['database', 'market', 'tools', 'site']
+} as const satisfies ChangelogSchema;
+
+export const releases = buildChangelog(entryGlob, releaseGlob, SCHEMA);
 ```
 
 `rate-limit` is the one that holds state, and the exception is bounded: nothing

@@ -1,5 +1,7 @@
 import type { Component, Snippet } from 'svelte';
 import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
+import type { PaletteRow, RowGroup } from '../dist/palette.js';
+import type { ChangelogRelease } from '../dist/changelog.js';
 
 /**
  * Props are spelled out rather than `Record<string, unknown>` (what uar-shared
@@ -108,6 +110,30 @@ export type TagProps = WithChildren<{
 }>;
 export declare const Tag: Component<TagProps>;
 
+export type ChangeChipProps = {
+	/** An entry `type` from the site's changelog schema. */
+	type: string;
+	/** Defaults to the type itself. */
+	label?: string | null;
+	/** Any CSS colour; beats the `--change-<type>` lookup. */
+	tint?: string | null;
+	[key: string]: unknown;
+};
+export declare const ChangeChip: Component<ChangeChipProps>;
+
+export type WhatsNewProps = {
+	/** The latest release; the card renders nothing when this is null. */
+	release: ChangelogRelease | null;
+	/** Where the footer link goes. */
+	href?: string;
+	title?: string;
+	linkLabel?: string;
+	/** Shown when the release holds only `minor` entries. */
+	emptyText?: string;
+	[key: string]: unknown;
+};
+export declare const WhatsNew: Component<WhatsNewProps>;
+
 export type ToggleProps = WithChildren<{
 	checked?: boolean;
 	label?: string;
@@ -153,6 +179,46 @@ export type StatTileProps = WithChildren<{
 	[key: string]: unknown;
 }>;
 export declare const StatTile: Component<StatTileProps>;
+
+export type SearchChipProps = Omit<HTMLButtonAttributes, 'children' | 'title'> & {
+	onopen: () => void;
+	/** The magnifier alone — the shape a narrow top bar has room for. */
+	compact?: boolean;
+	label?: string;
+	/** The key named on the chip, beside the platform's modifier. '' hides it. */
+	shortcut?: string;
+	/** Overrides the tooltip, which otherwise names all three bindings. */
+	title?: string;
+	/** Replaces the built-in magnifier. */
+	icon?: Snippet;
+};
+export declare const SearchChip: Component<SearchChipProps>;
+
+export type SearchDialogProps = {
+	/** Rows to draw, in order. A group with a label gets a seam above it. */
+	groups?: RowGroup[];
+	/** What the reader has typed. Bindable — this is the site's cue to fetch. */
+	query?: string;
+	/** The dialog has already closed by the time this runs. */
+	onselect?: (row: PaletteRow) => void;
+	/** Fired from `open()`, before the dialog shows: reset per-visit state here. */
+	onopen?: () => void;
+	onclose?: () => void;
+	placeholder?: string;
+	/** Accessible name for the dialog and its field. */
+	label?: string;
+	/** Replaces "Nothing matches …". */
+	emptyText?: string;
+	/** Draw row pictures as pixel art rather than smoothing them. */
+	pixelated?: boolean;
+	/** Replaces the keyboard hints along the bottom. */
+	footer?: Snippet;
+};
+/** `open()` and `close()` are exported from the instance — `bind:this` to reach them. */
+export declare const SearchDialog: Component<
+	SearchDialogProps,
+	{ open: () => void; close: () => void }
+>;
 
 export type HoverPopProps = {
 	heading?: string;

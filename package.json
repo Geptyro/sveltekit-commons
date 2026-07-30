@@ -1,6 +1,6 @@
 {
 	"name": "sveltekit-commons",
-	"version": "0.6.0",
+	"version": "0.8.0",
 	"description": "Design-token contract, Svelte 5 primitives and dependency-free helpers shared across SvelteKit sites",
 	"type": "module",
 	"license": "MIT",
@@ -18,6 +18,10 @@
 		},
 		"./tokens.css": "./src/styles/tokens.css",
 		"./base.css": "./src/styles/base.css",
+		"./palette": {
+			"types": "./dist/palette.d.ts",
+			"default": "./dist/palette.js"
+		},
 		"./place": {
 			"types": "./dist/place.d.ts",
 			"default": "./dist/place.js"
@@ -29,6 +33,10 @@
 		"./cache": {
 			"types": "./dist/cache.d.ts",
 			"default": "./dist/cache.js"
+		},
+		"./changelog": {
+			"types": "./dist/changelog.d.ts",
+			"default": "./dist/changelog.js"
 		},
 		"./feedback": {
 			"types": "./dist/feedback.d.ts",

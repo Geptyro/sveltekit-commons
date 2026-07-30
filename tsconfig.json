@@ -18,7 +18,14 @@
 		"rootDir": "src/helpers",
 		"outDir": "dist",
 		"skipLibCheck": true,
-		"verbatimModuleSyntax": true
+		"verbatimModuleSyntax": true,
+		// One helper imports another, and `npm test` runs the .ts sources
+		// directly under Node — which resolves an extension literally and would
+		// not find a `./text.js` that only exists after a build. So the source
+		// says `./text.ts`, and tsc rewrites it to `./text.js` on the way into
+		// dist/, where the extension is true again.
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true
 	},
 	"include": ["src/helpers/**/*.ts"]
 }
