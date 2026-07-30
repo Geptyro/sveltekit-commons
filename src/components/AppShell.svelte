@@ -222,7 +222,7 @@
 <style>
 	.shell {
 		/* ── shell metrics; a site may override any of them ─────────────── */
-		--rail-w: 58px;
+		--rail-w: 42px;
 		--chrome-h: 52px;
 		--content-pad-x: 36px;
 		--top-gap: 10px;
@@ -233,7 +233,7 @@
 
 		/* ── collapsed geometry; the two blocks below expand it ─────────── */
 		--side-w: var(--rail-w);
-		--side-pad-x: 8px;
+		--side-pad-x: 4px;
 		--label-display: none;
 		--nav-justify: center;
 		--nav-pad-x: 0px;
@@ -241,13 +241,24 @@
 		--label-align: center;
 		/* Stacked in both states. Side by side reads better in the rail and was
 		   the original choice, but it only fit while the footer had two marks —
-		   a third (the tip link) ran it off the 42px of usable width a 58px rail
+		   a third (the tip link) ran it off the ~34px of usable width the rail
 		   has. A column cannot overflow however many links a site puts there. */
 		--foot-dir: column;
 		--side-scrollbar: none;
-		/* with no labels to line up against, the icons take the room back */
-		--nav-slot: 28px;
-		--nav-glyph: 20px;
+		/* The rail is a gutter the content is permanently indented by, and on a
+		   phone it is the *only* state most visitors ever see it in, so its width
+		   is spent on every page. It used to be 58px around a 20px glyph — 19px
+		   of dead air either side, which read as an oversized gutter rather than
+		   a generous one.
+
+		   What actually sets the floor is the footer, not the icons. A collapsed
+		   nav row only needs its glyph, but a site's credit marks keep their text
+		   down here: STALZONE's "EXBO" attribution measures 32.4px at 12px, so
+		   34px of usable width (42 less 4px of padding each side) is the narrowest
+		   the rail goes before that starts clipping. Take the rail below this and
+		   check the footers, not the nav. */
+		--nav-slot: 26px;
+		--nav-glyph: 18px;
 
 		display: flex;
 		flex-direction: column;

@@ -107,8 +107,7 @@ export interface ChangelogProblem {
  *   entry then reads as a change to a part of the site it never touched.
  * - `imapct: minor` is not an unknown impact, it is an unknown KEY — the entry
  *   keeps `normal` and lands on the front page the author meant to keep it off.
- * - a quoted `title: 'X'` renders with the quotes, because this reader is not
- *   YAML (the sibling app's one strips them, which is where the habit starts).
+ * - a title `readFrontmatter` cannot unwrap keeps its quotes in the headline.
  * - a `[label](../items)` link renders as literal brackets in the page.
  *
  * So this is not schema pedantry: nothing downstream ever raises its voice, and

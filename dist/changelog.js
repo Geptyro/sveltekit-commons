@@ -70,6 +70,16 @@ export function latestVersionInfo(files) {
  * value keeps any `:` after the first one, so an unquoted `title: Fixed: the
  * thing` reads correctly.
  *
+ * A fully quoted value is unwrapped, which is not YAML sympathy — it is a bug
+ * fix. Authors quote a title with a colon in it because the sibling companion
+ * app's reader requires it and says so, and for fifteen releases those quotes
+ * rendered as part of the headline here. Stripping them makes the two readers
+ * agree, which is what both formats claim.
+ *
+ * The pattern demands no same-quote INSIDE, so `'a' and 'b'` is left alone
+ * rather than greedily unwrapped to `a' and 'b`. `lintEntry` picks up what is
+ * left over.
+ *
  * Shared by `parseEntry` and `lintEntry` so the reader that ships the site and
  * the reader that polices entries can never disagree about what a file says.
  */
@@ -81,9 +91,14 @@ function readFrontmatter(raw) {
     for (const line of fm[1].split(/\r?\n/)) {
         const kv = line.match(/^(\w+):\s*(.*)$/);
         if (kv)
-            meta[kv[1]] = kv[2].trim();
+            meta[kv[1]] = unquote(kv[2].trim());
     }
     return { meta, body: raw.slice(fm[0].length), found: true };
+}
+/** `'x'` and `"x"` -> `x`; anything else, including `'a' and 'b'`, untouched. */
+function unquote(value) {
+    const m = value.match(/^'([^']*)'$/) ?? value.match(/^"([^"]*)"$/);
+    return m ? m[1] : value;
 }
 /**
  * One entry file: `---` frontmatter, then the body.
@@ -120,8 +135,7 @@ const SAFE_HREF = /^(https?:\/\/|\/)/;
  *   entry then reads as a change to a part of the site it never touched.
  * - `imapct: minor` is not an unknown impact, it is an unknown KEY — the entry
  *   keeps `normal` and lands on the front page the author meant to keep it off.
- * - a quoted `title: 'X'` renders with the quotes, because this reader is not
- *   YAML (the sibling app's one strips them, which is where the habit starts).
+ * - a title `readFrontmatter` cannot unwrap keeps its quotes in the headline.
  * - a `[label](../items)` link renders as literal brackets in the page.
  *
  * So this is not schema pedantry: nothing downstream ever raises its voice, and
@@ -141,8 +155,9 @@ export function lintEntry(raw, schema) {
     if (!meta.title) {
         problems.push({ field: 'title', message: 'missing or empty — the entry falls back to its filename as the headline' });
     }
-    else if (/^(['"]).*\1$/.test(meta.title)) {
-        problems.push({ field: 'title', message: 'wrapped in quotes — this reader is not YAML, so the quotes render as part of the headline' });
+    else if (/^['"]/.test(meta.title) && /['"]$/.test(meta.title)) {
+        // already past unquote(), so the quotes here are ones it would not strip
+        problems.push({ field: 'title', message: `still quoted after unwrapping (\`${meta.title}\`) — a quote of the same kind inside blocks it, so the outer pair renders as part of the headline` });
     }
     for (const [field, allowed] of [
         ['type', schema.types],

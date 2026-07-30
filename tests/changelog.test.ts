@@ -175,12 +175,32 @@ test('lintEntry catches a misspelled key, not just a bad value', () => {
 	assert.equal(parseEntry(raw, SCHEMA).impact, 'normal');
 });
 
-test('lintEntry catches a missing title, and a quoted one', () => {
+test('lintEntry catches a missing title', () => {
 	assert.deepEqual(fields(entry('type: fix\narea: site')), ['title']);
-	assert.deepEqual(fields(entry("title: 'Fixed: the thing'\ntype: fix\narea: site")), ['title']);
-	// an unquoted colon is fine here — this reader keeps everything after the first
-	assert.deepEqual(fields(entry('title: Fixed: the thing\ntype: fix\narea: site')), []);
-	assert.equal(parseEntry(entry('title: Fixed: the thing\ntype: fix\narea: site'), SCHEMA).title, 'Fixed: the thing');
+});
+
+test('a quoted title is unwrapped, so it is not a problem', () => {
+	// the habit comes from the companion app, whose reader requires the quotes
+	const quoted = entry("title: 'Fixed: the thing'\ntype: fix\narea: site");
+	assert.equal(parseEntry(quoted, SCHEMA).title, 'Fixed: the thing');
+	assert.deepEqual(fields(quoted), []);
+	// an unquoted colon works too — the value keeps everything after the first
+	const bare = entry('title: Fixed: the thing\ntype: fix\narea: site');
+	assert.equal(parseEntry(bare, SCHEMA).title, 'Fixed: the thing');
+	assert.deepEqual(fields(bare), []);
+	// inner quotes of the other kind survive the unwrap
+	assert.equal(
+		parseEntry(entry('title: \'"Ready to play" in the top bar\'\ntype: fix\narea: site'), SCHEMA).title,
+		'"Ready to play" in the top bar'
+	);
+});
+
+test('lintEntry flags a title unquote() cannot unwrap rather than corrupting it', () => {
+	// greedy stripping would leave `a' and 'b` — it is left alone and reported
+	const raw = entry("title: 'a' and 'b'\ntype: fix\narea: site");
+	assert.equal(parseEntry(raw, SCHEMA).title, "'a' and 'b'");
+	assert.deepEqual(fields(raw), ['title']);
+	assert.match(lintEntry(raw, SCHEMA)[0].message, /still quoted after unwrapping/);
 });
 
 test('lintEntry catches an empty body and a link renderMarkdown will not honour', () => {
