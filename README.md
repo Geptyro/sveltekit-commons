@@ -229,6 +229,79 @@ passes through a snippet — and does not need to, because the variables cascade
 this. A site sets `--brand-w` on `:root` so the shell can line the page heading
 up with the content column below it.
 
+## Page chrome: `PageTitle` and `TabBar`
+
+The frame for a subject with more to say than one column can hold — an item's
+stats, its recipe and its price history; a product's sheet, its readings and its
+nutrition. Two halves that work apart but were designed together.
+
+```svelte
+<!-- +layout.svelte (root): the heading goes in the bar -->
+<AppShell>
+	{#snippet crumb()}
+		<NavProgress />
+		<PageTitle section={crumbFor.section} title={crumbFor.title} icon={crumbFor.icon} />
+	{/snippet}
+	{@render children()}
+</AppShell>
+
+<!-- [slug]/+layout.svelte: the subject's own bar, first in the content column -->
+<TabBar {tabs} {active} bind:height label="Sections" />
+{@render children()}
+```
+
+**`PageTitle`** is *the* page's heading, not a copy of one: a section crumb, the
+subject's picture, and the `<h1>`. Its whole point is that there is one heading
+on screen and it is always in the same place, so adopting it means **deleting
+the page's own `<h1>`** — otherwise a screen reader announces the subject twice
+and the page opens with a title the eye has already read.
+
+The subject comes off `page.data`: a detail page already loads the thing it is
+about, so the bar shows that thing's name and picture with no second lookup and
+no store to keep in sync. The route → subject mapping stays in the site's root
+layout — it is the one part that cannot be shared, because only the site knows
+what its own loaders return. `--page-title-cell` sets the plate behind the
+picture, for art drawn as a dark silhouette against a sunken surface.
+
+**`TabBar`** is the sub-bar, and where it sits is not decorative: **first thing
+inside the content column, and nowhere else.** Its margins are what make it a
+bar rather than a boxed widget — it bleeds out through `--content-pad-x` on both
+sides so nothing scrolls past in the gutters, and up through `--content-pad-top`
+so there is no seam under the header. Put it below anything and those negative
+margins pull it over whatever came first. `top: 0` and not `--chrome-h` because
+`AppShell` scrolls `main`, not the window.
+
+Tabs are ordinary links to sub-routes, so they prerender by crawling,
+middle-click, and work with JavaScript off. Below 900px — the width where the
+shell folds its own rail — a tab shows its icon alone; the label stays in
+`aria-label` and `title` at every width. `bind:height` because a tab that wants
+the rest of the window has to subtract the bar, and the bar changes height
+between the two layouts.
+
+**Fewer than two tabs renders nothing at all**, unless you pass `showAlone`. One
+tab is no choice, so by default it is not a tab bar — a subject with only its
+overview reads exactly as it did before it was ever split, and a site can adopt
+the frame before it has earned a second tab.
+
+`showAlone` is the other reading, and it is a real one: where *every* detail page
+carries the bar, a page that drops it looks like it lost its chrome rather than
+like it has less to say, and a lone tab stops being a choice and becomes a label
+for where you are. STALZONE takes the default (its entities differ wildly in what
+they can show); OpenGrocer passes `showAlone` (its three detail pages should look
+like each other). Neither ever draws an empty bar — no tabs is still nothing.
+
+`shortcuts` claims Tab/Shift+Tab and the number row (positionally, by `e.code`,
+so AZERTY needs no settings page; the caps come from `getLayoutMap` where it
+exists). **It is off by default and should stay off unless you mean it** — Tab
+is the key that moves focus, so taking it means nothing inside the tab can be
+reached without a pointer. Worth it for a reference people browse with a mouse;
+not worth it for a site with forms, a basket or a checkout.
+
+Which tabs a subject gets is the site's business, not this component's. STALZONE
+derives them from capabilities (`src/lib/entities.ts`); OpenGrocer's product page
+asks whether there is more than one reading and whether Open Food Facts knows the
+barcode. Both feed the same `{href, label, icon, key}[]`.
+
 ## The feedback form
 
 ```js

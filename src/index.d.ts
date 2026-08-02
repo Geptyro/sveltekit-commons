@@ -67,6 +67,57 @@ export declare const NavItem: Component<NavItemProps>;
 export type NavSectionProps = { children?: Snippet; [key: string]: unknown };
 export declare const NavSection: Component<NavSectionProps>;
 
+export type PageTitleProps = {
+	/** Where this page sits — rendered as `SECTION /`. */
+	section?: string | null;
+	/** The subject. Null renders the section alone, with no `<h1>`. */
+	title?: string | null;
+	/** The subject's own picture, at 26px. */
+	icon?: string | null;
+	/** Decorative by default — the heading beside it already names the subject. */
+	iconAlt?: string;
+	/** Draw the icon as pixel art rather than smoothing it. */
+	pixelated?: boolean;
+	[key: string]: unknown;
+};
+/** For AppShell's `crumb` slot. It renders the page's `<h1>` — delete the one
+ *  on the page, or the subject is announced twice. */
+export declare const PageTitle: Component<PageTitleProps>;
+
+export interface Tab {
+	href: string;
+	label: string;
+	/** Inert markup you own, rendered with `{@html}`; below 900px it is all a
+	 *  tab shows. */
+	icon?: string;
+	/** What `active` is matched against; falls back to `href`. */
+	key?: string;
+}
+
+export type TabBarProps = {
+	/** In tab order. Fewer than two renders nothing, unless `showAlone`. */
+	tabs?: Tab[];
+	/** `key` (or `href`) of the tab being shown. */
+	active?: string;
+	/** Accessible name — say what the tabs are sections *of*. */
+	label?: string;
+	/** Draw the bar even with a single tab. Never draws an empty one. */
+	showAlone?: boolean;
+	/** Measured height, for a tab sizing itself against the rest of the window. */
+	height?: number;
+	/**
+	 * Claim Tab/Shift+Tab and the number row. Off by default: it takes the key
+	 * that moves focus, so anything inside the tab needs a pointer to reach.
+	 */
+	shortcuts?: boolean;
+	/** Where `shortcuts` sends the reader — `goto`, typically. */
+	onnavigate?: ((href: string) => void) | null;
+	[key: string]: unknown;
+};
+/** Sticky sub-bar of tabs. Must be the first thing in AppShell's content
+ *  column — its margins bleed out through that column's padding. */
+export declare const TabBar: Component<TabBarProps>;
+
 export type BreadcrumbsProps = {
 	/** Root-first; the last entry is the current page. */
 	trail?: Crumb[];
