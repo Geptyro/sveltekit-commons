@@ -15,8 +15,8 @@
 	 * Everything site-specific arrives as a snippet — the brand mark, the page
 	 * heading, the top-right tools, the sidebar's contents and its footer. What
 	 * is here is the geometry and the behaviour: the breakpoints, the burger,
-	 * the drawer and its scrim, the remembered collapse, and the rail's scroll
-	 * hints.
+	 * the drawer, its scrim and the drag that opens it, the remembered collapse,
+	 * and the rail's scroll hints.
 	 *
 	 * ── How the collapse works ───────────────────────────────────────────
 	 *
@@ -156,13 +156,141 @@
 		if (closeArmed) close();
 		else closeArmed = true;
 	});
+
+	/* ── Dragging the drawer ─────────────────────────────────────────────
+	 *
+	 * On a phone the burger is a small mark in a corner and the panel it opens
+	 * starts under your thumb, so the panel is draggable too: pull the rail
+	 * right to open it, push the panel or its scrim left to close it, let go
+	 * and it finishes the trip — past halfway by position, or from anywhere by
+	 * a throw. The burger keeps working; this is a second way in, not a
+	 * replacement.
+	 *
+	 * The gesture drives one number, `--drag-p`, from 0 (rail) to 1 (open).
+	 * The panel's width, the burger's fold and the scrim's dimming are all
+	 * calc()ed off it, so everything that moves during the 180ms transition
+	 * moves under the finger instead — the panel tracks the hand rather than
+	 * playing a canned animation at the end of it. The open variable set
+	 * applies for the whole drag, which is what makes the labels slide out
+	 * from behind the icons the way they do on the way in.
+	 *
+	 * Narrow only. Wide, the sidebar is docked furniture and its collapse is a
+	 * remembered preference, not something to fling about.
+	 */
+	const DRAG_SLOP = 8; /* px of travel before a press is a drag and not a tap */
+	const DRAG_FLICK = 0.4; /* px/ms past which the throw decides, not the position */
+	const DRAG_STALE = 80; /* ms; a finger that paused before lifting threw nothing */
+
+	let shellEl = $state(null);
+	/* null means "not dragging" — the stylesheet owns the width again */
+	let dragP = $state(null);
+	let dragPid = null;
+	let dragEl = null; /* whichever of the two holds the pointer capture */
+	let dragAxis = null; /* null while the gesture is still undecided */
+	let dragX0 = 0;
+	let dragY0 = 0;
+	let dragXa = 0; /* x where it committed to the horizontal, so nothing jumps */
+	let dragFrom = 0; /* the p it started at: 0 from the rail, 1 from the panel */
+	let dragTravel = 1;
+	let dragVx = 0;
+	let dragLastX = 0;
+	let dragLastT = 0;
+	/* a drag that ends over a nav row must not also count as a tap on it */
+	let dragTapped = false;
+
+	function dragStart(e) {
+		/* first, and past the guards: a drag that settled shut takes its scrim
+		   down with it, and a click has nowhere to land — the flag would still
+		   be up when the next real one arrives */
+		dragTapped = false;
+		if (wide || dragPid !== null) return;
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		dragPid = e.pointerId;
+		dragEl = e.currentTarget;
+		dragAxis = null;
+		dragX0 = dragLastX = e.clientX;
+		dragY0 = e.clientY;
+		dragLastT = e.timeStamp;
+		dragVx = 0;
+	}
+
+	function dragMove(e) {
+		if (e.pointerId !== dragPid) return;
+
+		if (dragAxis === null) {
+			const dx = e.clientX - dragX0;
+			const dy = e.clientY - dragY0;
+			if (Math.abs(dx) < DRAG_SLOP && Math.abs(dy) < DRAG_SLOP) return;
+			/* upright is the rail scrolling; hand the gesture back untouched */
+			if (Math.abs(dy) >= Math.abs(dx)) return dragCancel(e);
+			dragAxis = 'x';
+			dragXa = e.clientX;
+			dragFrom = navOpen === true ? 1 : 0;
+			/* Both are registered lengths, so this reads them back in px —
+			   unregistered, `min(280px, 82vw)` comes back as that string and
+			   there is no travel to measure. The fallbacks are the declared
+			   defaults, for a browser without @property. */
+			const css = getComputedStyle(shellEl);
+			const rail = parseFloat(css.getPropertyValue('--rail-w')) || 42;
+			const open = parseFloat(css.getPropertyValue('--drawer-w')) || 280;
+			dragTravel = Math.max(1, open - rail);
+			dragEl.setPointerCapture(dragPid);
+		}
+
+		const dt = e.timeStamp - dragLastT;
+		if (dt > 0) dragVx = (e.clientX - dragLastX) / dt;
+		dragLastX = e.clientX;
+		dragLastT = e.timeStamp;
+		dragP = Math.min(1, Math.max(0, dragFrom + (e.clientX - dragXa) / dragTravel));
+		/* mouse drags would otherwise select the labels they pass over */
+		if (e.cancelable) e.preventDefault();
+	}
+
+	function dragEnd(e) {
+		if (e.pointerId !== dragPid) return;
+		dragPid = null;
+		dragAxis = null;
+		if (dragP === null) return; /* never became a drag: it was a tap */
+		const thrown = e.timeStamp - dragLastT > DRAG_STALE ? 0 : dragVx;
+		const settled = thrown > DRAG_FLICK ? true : thrown < -DRAG_FLICK ? false : dragP > 0.5;
+		dragP = null;
+		dragTapped = true;
+		navOpen = settled;
+	}
+
+	function dragCancel(e) {
+		if (e.pointerId !== dragPid) return;
+		dragPid = null;
+		dragAxis = null;
+		if (dragP === null) return;
+		dragP = null;
+		dragTapped = true;
+	}
+
+	/* Capture phase, and immediate: the click lands on whatever the finger came
+	   to rest on — a nav link, the scrim — and both would act on a gesture that
+	   was never aimed at them. */
+	function dragClick(e) {
+		if (!dragTapped) return;
+		dragTapped = false;
+		e.preventDefault();
+		e.stopImmediatePropagation();
+	}
+
+	const shellVars = $derived(
+		[brandW ? `--brand-w: ${brandW}px` : '', dragP !== null ? `--drag-p: ${dragP}` : '']
+			.filter(Boolean)
+			.join('; ') || undefined
+	);
 </script>
 
 <div
 	class="shell"
-	class:nav-open={navOpen === true}
-	class:nav-closed={navOpen === false}
-	style={brandW ? `--brand-w: ${brandW}px` : undefined}
+	bind:this={shellEl}
+	class:nav-open={navOpen === true || dragP !== null}
+	class:nav-closed={navOpen === false && dragP === null}
+	class:dragging={dragP !== null}
+	style={shellVars}
 >
 	<header class="topbar">
 		<button
@@ -197,8 +325,20 @@
 	</header>
 
 	<div class="body">
-		{#if drawer}
-			<button class="scrim" aria-label="Close menu" onclick={() => (navOpen = false)}></button>
+		<!-- also up during a drag out of the rail, dimming with it: the panel is
+		     coming over the page, so the page has to start giving way at once -->
+		{#if drawer || dragP !== null}
+			<button
+				class="scrim"
+				aria-label="Close menu"
+				style="opacity: {dragP ?? 1}"
+				onclick={() => (navOpen = false)}
+				onclickcapture={dragClick}
+				onpointerdown={dragStart}
+				onpointermove={dragMove}
+				onpointerup={dragEnd}
+				onpointercancel={dragCancel}
+			></button>
 		{/if}
 
 		<aside
@@ -207,24 +347,62 @@
 			bind:this={sideEl}
 			onscroll={syncHints}
 			ontransitionend={syncHints}
+			onclickcapture={dragClick}
+			onpointerdown={dragStart}
+			onpointermove={dragMove}
+			onpointerup={dragEnd}
+			onpointercancel={dragCancel}
 			style="--hint-up: {hintUp}; --hint-down: {hintDown}"
 		>
 			<nav aria-label={navLabel}>{@render nav?.(close)}</nav>
 			{#if foot}<div class="foot">{@render foot()}</div>{/if}
 		</aside>
 
-		<main>
-			<div class="content">{@render children?.()}</div>
-		</main>
+		<!-- No padding, no scrollbar: a box of a known height, and what happens
+		     inside it is the page's business. `Page` is the ordinary answer. -->
+		<main>{@render children?.()}</main>
 	</div>
 </div>
 
 <style>
+	/* Registered so the drag can read them back as pixels: an unregistered
+	   custom property comes out of getComputedStyle as whatever was typed, and
+	   `min(280px, 82vw)` is not a distance to divide a finger's travel by. As
+	   registered lengths they compute, viewport units and all. */
+	@property --rail-w {
+		syntax: '<length>';
+		inherits: true;
+		initial-value: 42px;
+	}
+	@property --drawer-w {
+		syntax: '<length>';
+		inherits: true;
+		initial-value: 280px;
+	}
+
 	.shell {
 		/* ── shell metrics; a site may override any of them ─────────────── */
 		--rail-w: 42px;
+		/* how far the narrow drawer opens; the rail's width is its other end */
+		--drawer-w: min(280px, 82vw);
 		--chrome-h: 52px;
+		/* The page's own gutters, declared here and spent by `Page`. They live on
+		   the shell because they belong to the column's geometry — the crumb's
+		   offset below reads --content-pad-x to line the heading up with the text
+		   under it — and because a separate component can only inherit them. */
 		--content-pad-x: 36px;
+		--content-pad-top: 26px;
+		--content-pad-bottom: 72px;
+		/* How much room the scrollbar takes out of a scrolling box. `Page` takes
+		   it off its right padding so the two gutters match on screen and not
+		   merely in the stylesheet.
+
+		   Declared rather than measured because measuring means painting once at
+		   one width and reflowing to another, and a media query gets it right
+		   before the first paint. See the coarse-pointer override below for the
+		   half of this that is not 10px, and keep it in step with the site's own
+		   ::-webkit-scrollbar width — nothing can check that for you. */
+		--scrollbar-w: 10px;
 		--top-gap: 10px;
 		--top-pad-x: 14px;
 		--burger-w: 34px;
@@ -264,6 +442,21 @@
 		flex-direction: column;
 		width: 100%;
 		height: 100dvh;
+	}
+
+	/* A touch device overlays its scrollbars: they float over the content and
+	   take no room, so there is none to give back and taking any would leave the
+	   right gutter short by exactly the width of a scrollbar that was never
+	   there. This is the whole reason the width is a variable rather than a
+	   number written into `Page`.
+
+	   `pointer: coarse` and not a width: it is the input that decides this, not
+	   the viewport. A desktop window dragged narrow still has a real scrollbar,
+	   and a phone has none at any size. */
+	@media (pointer: coarse) {
+		.shell {
+			--scrollbar-w: 0px;
+		}
 	}
 
 	/* Expanded, in two halves: wide screens unless you collapsed the nav,
@@ -308,6 +501,26 @@
 			--burger-cross: 45deg;
 			--burger-mid: 0;
 		}
+		/* Under the finger the mark folds by degrees rather than running its own
+		   animation ahead of the panel — drag halfway and the bars are halfway
+		   into the cross, drag back and they come out of it. Same specificity as
+		   the block above, so it has to sit after it. */
+		.shell.dragging {
+			--burger-turn: calc(180deg * var(--drag-p, 0));
+			--burger-fold: calc(6px * var(--drag-p, 0));
+			--burger-cross: calc(45deg * var(--drag-p, 0));
+			--burger-mid: calc(1 - var(--drag-p, 0));
+		}
+	}
+
+	/* nothing under the hand animates: the hand is the animation */
+	.shell.dragging {
+		user-select: none;
+		-webkit-user-select: none;
+	}
+	.shell.dragging .burger-glyph,
+	.shell.dragging .burger-glyph .bar {
+		transition: none;
 	}
 
 	/* one line, always: only the crumb may shrink, everything else is nowrap
@@ -420,21 +633,37 @@
 		gap: 10px;
 	}
 
+	/* The containing block for the narrow drawer and its scrim. Both used to be
+	   fixed to the viewport and offset down by --chrome-h, which quietly made
+	   that token load-bearing: it is the bar's flex-basis, and a flex item's
+	   automatic minimum size floors it at its content, so a bar whose rows need
+	   more than the token says is taller than the token says. The rail then
+	   started that much too high and painted over the bar's bottom border —
+	   visible as the border going missing across the rail's width, and only
+	   there. Positioned against this box instead, they start where the bar
+	   actually ends, whatever it measures. */
 	.body {
+		position: relative;
 		flex: 1;
 		display: flex;
 		min-height: 0;
 	}
 
-	/* dims the content behind the open drawer; tapping it closes */
+	/* dims the content behind the open drawer; tapping it closes, and pushing it
+	   left closes it the way it was opened */
 	.scrim {
-		position: fixed;
-		inset: var(--chrome-h) 0 0 0;
+		position: absolute;
+		inset: 0;
 		z-index: var(--z-scrim);
 		border: 0;
 		padding: 0;
 		background: rgb(10 12 8 / 0.5);
 		cursor: pointer;
+		touch-action: none;
+		transition: opacity 180ms ease;
+	}
+	.shell.dragging .scrim {
+		transition: none;
 	}
 
 	/* The rail's two scroll hints, registered so they can be transitioned: an
@@ -483,7 +712,7 @@
 		/* the labels are clipped by the box as it narrows, so the collapse
 		   reads as the words sliding away behind the icons */
 		overflow-x: hidden;
-		padding: 14px var(--side-pad-x);
+		padding: var(--side-pad-top, 14px) var(--side-pad-x);
 		scrollbar-color: var(--border) transparent;
 		scrollbar-width: var(--side-scrollbar);
 		transition:
@@ -508,16 +737,33 @@
 		line-height: 1.5;
 	}
 
+	/* The shell does not scroll the page, and this is the whole of why.
+
+	   A scrollbar always spans its own scroller, top to bottom. While this box
+	   was the scroller, anything a page wanted to pin above the scrolling
+	   part — a bar of tabs — could only be `position: sticky` *content*, so the
+	   scrollbar ran up alongside it and the bar stopped a scrollbar's width
+	   short of the window. Nothing a page could write would fix that from
+	   inside. The bar had to be outside the scroller, and the only way to be
+	   outside a scroller the shell owns is for the shell not to own one.
+
+	   So this is a box of a known height and nothing else: no padding, no
+	   overflow, no opinion about what a page is. A page composes its own —
+	   `Page` for the ordinary case, chrome plus a `Page` for a frame like
+	   STALZONE's entity tabs or UAR's profile — and the scrollbar it gets is
+	   the one it asked for, starting where it put it.
+
+	   The column is `flex` so a page can hand a child the rest of the height
+	   with `flex: 1` and have it mean something. */
 	main {
 		flex: 1;
 		min-width: 0;
-		overflow-y: auto;
-	}
-
-	.content {
-		--content-pad-top: 26px;
-		--content-pad-bottom: 72px;
-		padding: var(--content-pad-top) var(--content-pad-x) var(--content-pad-bottom);
+		/* a flex item floors at its content without this, and a box that cannot
+		   be shorter than what it holds hands its children a lie */
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
 
 	/* Narrow: the rail stays put and opening it lays the full panel over the
@@ -527,20 +773,43 @@
 		.body {
 			padding-left: var(--rail-w);
 		}
+		.shell {
+			/* The rail here butts straight onto the bar rather than sitting under a
+			   docked header with room to spare, and 14px read as a gap the rhythm
+			   below it never repeats. One row clears the next by its own padding,
+			   nav's 1px gap, then the next row's padding — so clearing the bar by
+			   the same amount means padding + --nav-pad-y = --nav-pad-y + 1px +
+			   --nav-pad-y, which is this. 6px against the collapsed rail, 8px once
+			   the drawer's rows loosen, and it eases between the two with the rest
+			   of the collapse instead of being a second number to keep in step. */
+			--side-pad-top: calc(var(--nav-pad-y) + 1px);
+		}
 		.sidebar {
-			position: fixed;
-			top: var(--chrome-h);
+			/* absolute against .body, so the top edge is the bar's real bottom
+			   rather than what --chrome-h claims it is */
+			position: absolute;
+			top: 0;
 			bottom: 0;
 			left: 0;
 			z-index: var(--z-nav);
 			width: var(--side-w);
+			/* The rail is the drawer's handle, so the sideways gesture has to
+			   reach this component — but the rail scrolls, and that gesture is
+			   the browser's. `pan-y` splits them at the source: upright never
+			   arrives here, sideways is never a scroll. */
+			touch-action: pan-y pinch-zoom;
 		}
 		.shell.nav-open .sidebar {
-			width: min(280px, 82vw);
+			width: var(--drawer-w);
 			border-right: var(--border-width) solid var(--border);
 			box-shadow: var(--shadow-2);
 		}
-		.content {
+		/* mid-gesture the width is a position, not a destination */
+		.shell.dragging .sidebar {
+			width: calc(var(--rail-w) + (var(--drawer-w) - var(--rail-w)) * var(--drag-p, 0));
+			transition: none;
+		}
+		.shell {
 			--content-pad-top: 16px;
 			--content-pad-bottom: 24px;
 		}
@@ -552,18 +821,52 @@
 	   row to the brand and the tools. */
 	@media (max-width: 620px) {
 		.shell {
-			--chrome-h: 78px;
+			/* 5 + 34 + 2 + 34 + 5 + 1: the padding, the two rows, the row gap and
+			   the bottom border. 78 was the same sum taken against a 32px first
+			   row, and the bar has been three pixels taller than its own token
+			   ever since the tools grew — which nothing inside the shell notices
+			   any more, but the sites do: half a dozen panes size themselves
+			   `calc(100dvh - var(--chrome-h) - …)` and were that much too tall
+			   here. A floor rather than a promise, so a site whose tools are
+			   taller still gets a correct bar and a slightly stale token. */
+			--chrome-h: 81px;
+			/* Both ends of the bar's first row, as one number so they cannot
+			   drift apart. It is the brand's offset onto the rail's axis that
+			   sets it — the mark has to line up with the burger and the rail's
+			   icons under it, and that is not a free choice — so the tools take
+			   the same inset on the right rather than the bar keeping
+			   --top-pad-x there and sitting visibly further off that edge than
+			   the mark does on this one. */
+			--bar-inset: max(0px, calc((var(--rail-w) - var(--brand-w, 32px)) / 2));
 		}
 		.topbar {
 			flex-wrap: wrap;
 			align-content: center;
 			column-gap: 0;
 			row-gap: 2px;
-			padding: 5px var(--top-pad-x) 5px 0;
+			/* left is 0 because the burger below fills a rail-wide slot from the
+			   very edge; the brand adds --bar-inset back for itself, and the right
+			   is that same inset so the two ends match */
+			padding: 5px var(--bar-inset) 5px 0;
 		}
+		/* On the rail's centre line, which is where the burger's glyph and every
+		   collapsed nav icon already sit — all three centre in the same rail-wide
+		   slot, so the axis is --rail-w / 2 and nothing below has to be measured
+		   to find it.
+
+		   Centre and not left edge, though the left edge is the tempting one: a
+		   brand mark is a filled block and the icons are line art, so matching
+		   their left edges (11px here) leaves a 32px badge hanging 13px past a
+		   18px icon and reads as further out of column than the 14px inset this
+		   replaced. Aligning the axes puts it at 5px and the eye settles.
+
+		   --brand-w is the width the crumb already has measured. The fallback is
+		   the 32px mark all three sites ship, so prerendered markup lands on the
+		   offset hydration then confirms instead of jumping to it — see
+		   --bar-inset above, which the bar's right padding spends too. */
 		.brand {
 			order: 1;
-			margin-left: var(--top-pad-x);
+			margin-left: var(--bar-inset);
 		}
 		.tools {
 			order: 1;

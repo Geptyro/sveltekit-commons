@@ -207,6 +207,16 @@ and closes from the `close()` the `nav` snippet receives.
 `NavProgress` (and `Pager`) stay on `/app`: they read SvelteKit's navigation
 and page state, and there is no router-free version of that.
 
+On a narrow screen the drawer is **draggable** as well as tappable: pull the
+rail right to open it, push the panel or its scrim left to close it, and let go
+— past halfway it settles open by position, from anywhere it settles by a
+throw. The burger keeps working exactly as before; this is a second way in, not
+a replacement for it, and it needs nothing from the caller. Vertical gestures
+stay the rail's own scrolling (`touch-action: pan-y`), a drag under 8px is
+still a tap, and a drag that happens to end on a nav row does not follow it.
+`--drawer-w` is how far it opens, `min(280px, 82vw)` unless a site says
+otherwise.
+
 The collapse is done entirely with custom properties: `.shell` declares the
 collapsed geometry and the two expanded states override it, so the rail width,
 the label visibility, the icon size and the burger's own glyph all read the
@@ -322,6 +332,71 @@ Which tabs a subject gets is the site's business, not this component's. STALZONE
 derives them from capabilities (`src/lib/entities.ts`); OpenGrocer's product page
 asks whether there is more than one reading and whether Open Food Facts knows the
 barcode. Both feed the same `{href, label, icon, key}[]`.
+
+### `TabSwipe`: the same move by hand
+
+```svelte
+<TabBar {tabs} {active} bind:height shortcuts onnavigate={go} />
+<TabSwipe {tabs} {active} onnavigate={go} preload={preloadData} />
+```
+
+The bar's keyboard shortcuts, for the screen that has no keyboard: below 900px a
+horizontal drag anywhere on the page moves to the next tab or the previous one.
+Same `tabs`, same `active`, same `onnavigate` — it renders no chrome, only a peek
+naming where the pull is heading, which hardens once you have pulled far enough
+to commit. Past 30% of the window, or a flick from anywhere, and it goes.
+
+**The page does not follow the finger, and cannot.** The tabs are routes with
+their own server loads, so the tab you are pulling toward is not in the document
+to be dragged — a swipe that appeared to drag it in would be dragging in a blank.
+What moves is what exists: the column gives against the pull, the peek arrives,
+and the release is the navigation. Pass `preload` (SvelteKit's `preloadData`) and
+the destination is fetched the moment the gesture arms, so letting go lands on a
+page rather than a spinner.
+
+A page-wide horizontal drag is the most contested gesture on a phone, so it
+yields, in this order:
+
+| what it yields to | how it knows |
+|---|---|
+| the shell's header, rail and scrim | the pointer did not start inside `<main>` |
+| the tab bar, a dialog | `<nav>` / `<dialog>` up the chain |
+| a surface that took the gesture itself | `touch-action: none` — which is how STALZONE's pan-zoom trees keep it, with no change to them |
+| anything a site wants to keep | `[data-noswipe]` |
+| a wide table or any sideways scroller | outright, for as long as the pointer lasts |
+
+**It needs a scrolling `<Page>`**, and does nothing without one. TabSwipe owns
+no box: it publishes `data-tab-swipe` and `--tab-swipe-x` on the root, and
+`Page` reads both — the nudge is drawn there, on the box that actually moves,
+so only the page gives and the `docked` bar above it stays put.
+
+`Page` also carries the `touch-action: pan-y pinch-zoom` that makes any of it
+possible. That is not a preference: `overflow-y: auto` turns the other axis to
+`auto` along with it, so the browser treats the column as a horizontal scroll
+container and claims every sideways drag on sight — two pointermoves in,
+`pointercancel`, gesture over. Saying the column does not pan sideways (already
+true) stops the competition. Verified in Chrome that it costs the scrollers
+inside nothing: UAR's replay table scrolls the same 218px under a finger either
+way, because an element with its own `overflow-x` is its own scroll container
+with its own `touch-action`.
+
+Both declarations sit with the scrolling rather than in TabSwipe, and that is
+the lesson from getting it wrong: they were `:global` selectors on `main`, and
+both went dead the day the scrollbar moved down out of `main` into `Page`. A
+package guessing at a caller's markup breaks on the next restructure.
+
+A route on **`<Page fill>`** — one whose insides scroll — gets no swipe:
+whatever scrolls in there claims the drag first.
+
+**A sideways scroller refuses outright rather than handing over at its edge**,
+and that is not laziness. The pager rule — the scroller keeps the drag until it
+runs out of travel, then the page takes it — cannot be built on pointer events:
+`preventDefault` on a `pointermove` does not stop a scroll, only `touch-action`
+does, and that is settled before the finger lands. Measured with the table at
+its edge, and again with `overscroll-behavior-x: none`: the gesture arms, the
+browser claims it anyway, `pointercancel` arrives. So a page that *is* one wide
+table gets no swipe, and the fix for that page is a table that does not need to
+scroll sideways on a phone.
 
 ## The feedback form
 

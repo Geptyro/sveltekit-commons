@@ -236,13 +236,19 @@ table.data tbody tr:hover {
    the rows scroll, so the table reaches the bottom of the window instead of
    floating above it. Heights come from the shell's own variables, so a site
    that changes its chrome does not have to restate them here. */
+/* Goes in a `<Page fill>`, which is a flex column that does not scroll: this
+   takes the height left in it and the rows below scroll inside that.
+
+   It used to work the height out for itself — `100dvh` less the shell's bar,
+   less any bar of tabs, less the column's top padding, plus a negative bottom
+   margin to give the bottom padding back — because the shell scrolled the page
+   and there was no other way to be told how much room was left. A page that
+   owns its own scroller is simply handed the room. */
 .datapage {
 	display: flex;
 	flex-direction: column;
-	height: calc(100dvh - var(--chrome-h, 52px) - var(--content-pad-top, 26px));
-	/* gives back the column's bottom padding: the last row ends on the window
-	   edge rather than above a strip of empty page */
-	margin-bottom: calc(-1 * var(--content-pad-bottom, 72px));
+	flex: 1;
+	min-height: 0;
 }
 
 .datapage .dtools {

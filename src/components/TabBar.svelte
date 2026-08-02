@@ -55,6 +55,19 @@
 		 */
 		showAlone = false,
 		/**
+		 * Rendered as the shell's own furniture — AppShell's `subchrome` slot —
+		 * rather than as the first thing in the content column.
+		 *
+		 * Drops the sticky and the negative margins, which exist only to make
+		 * content behave like chrome: in the slot the bar already sits outside
+		 * the box that scrolls, so it stays put without being told to and there
+		 * is no content padding to bleed back out through. Prefer it — it is the
+		 * placement where the scrollbar starts beneath the bar instead of running
+		 * up alongside it — but it stays opt-in so a site can move one bar at a
+		 * time.
+		 */
+		docked = false,
+		/**
 		 * The bar's measured height. Bindable, because a tab that wants the rest
 		 * of the window has to subtract it, and it changes between the wide and
 		 * the icons-only layout — so it is measured, never guessed.
@@ -181,7 +194,13 @@
 <svelte:window {onkeydown} />
 
 {#if tabs.length > (showAlone ? 0 : 1)}
-	<nav class="tabs {klass}" bind:clientHeight={height} aria-label={label} {...rest}>
+	<nav
+		class="tabs {klass}"
+		class:docked
+		bind:clientHeight={height}
+		aria-label={label}
+		{...rest}
+	>
 		{#each tabs as t, i (keyOf(t))}
 			<!-- The label is hidden below 900px, not removed, so `aria-label`
 			     carries the name at every width and the tooltip covers a pointer
@@ -225,6 +244,14 @@
 		padding: 0 var(--content-pad-x, 36px);
 		background: var(--surface-sunken);
 		border-bottom: var(--border-width) solid var(--border);
+	}
+
+	/* In the shell's slot the bar is already outside the scroller: nothing to
+	   stick to, and no content padding to pull back out of. It keeps its own
+	   horizontal scroll, which is what carries a long set of tabs on a phone. */
+	.tabs.docked {
+		position: static;
+		margin: 0;
 	}
 
 	.tabs::-webkit-scrollbar {

@@ -17,6 +17,23 @@ export interface Crumb {
 	href?: string;
 }
 
+export type PageProps = {
+	/**
+	 * The page does not scroll; something inside it does — a `.datapage`'s rows,
+	 * say. Also drops the bottom gutter, since such a page ends on the window's
+	 * edge. Give the child that should take the remaining height `flex: 1`.
+	 */
+	fill?: boolean;
+	children?: Snippet;
+	[key: string]: unknown;
+};
+/**
+ * The page's gutters and its scrollbar. AppShell hands down a box of a known
+ * height and scrolls nothing itself, so this is what an ordinary page puts in
+ * it — and page chrome (a `docked` TabBar) goes *beside* this, not inside it.
+ */
+export declare const Page: Component<PageProps>;
+
 export type AppShellProps = {
 	/** localStorage key for the remembered collapse, e.g. `sz:nav-open`. */
 	navKey?: string;
@@ -103,6 +120,12 @@ export type TabBarProps = {
 	label?: string;
 	/** Draw the bar even with a single tab. Never draws an empty one. */
 	showAlone?: boolean;
+	/**
+	 * Rendered in AppShell's `subchrome` slot rather than inside the content
+	 * column: drops the sticky and the negative margins, and the scroller then
+	 * starts below the bar instead of running up alongside it. Preferred.
+	 */
+	docked?: boolean;
 	/** Measured height, for a tab sizing itself against the rest of the window. */
 	height?: number;
 	/**
@@ -121,9 +144,37 @@ export type TabBarProps = {
 	onnavigate?: ((href: string) => void) | null;
 	[key: string]: unknown;
 };
-/** Sticky sub-bar of tabs. Must be the first thing in AppShell's content
- *  column — its margins bleed out through that column's padding. */
+/** Sub-bar of tabs. With `docked`, goes in AppShell's `subchrome` slot; without
+ *  it, sticky and must be the first thing in AppShell's content column, since
+ *  its margins bleed out through that column's padding. */
 export declare const TabBar: Component<TabBarProps>;
+
+export type TabSwipeProps = {
+	/** The same array TabBar gets. */
+	tabs?: Tab[];
+	/** `key` (or `href`) of the tab being shown. */
+	active?: string;
+	/** Where a completed swipe goes. Without it the gesture never arms. */
+	onnavigate?: ((href: string) => void) | null;
+	/**
+	 * SvelteKit's `preloadData`, called as soon as the gesture arms so letting
+	 * go lands on a page rather than a spinner. A prop, not an import, so this
+	 * entry stays router-free.
+	 */
+	preload?: ((href: string) => unknown) | null;
+	/** At or above this width the gesture is off. Match AppShell's `wideAt`. */
+	upTo?: number;
+	/** Fraction of the window a pull must cross to commit. */
+	commitAt?: number;
+};
+/**
+ * Swipe the page sideways between a subject's tabs — TabBar's companion, for
+ * narrow screens. Renders nothing but a peek at the destination. Yields to
+ * anything with a better claim on a sideways drag: a horizontal scroller with
+ * travel left, `touch-action: none`, a `<nav>` or `<dialog>`, `[data-noswipe]`,
+ * and everything outside AppShell's `<main>`.
+ */
+export declare const TabSwipe: Component<TabSwipeProps>;
 
 export type BreadcrumbsProps = {
 	/** Root-first; the last entry is the current page. */
