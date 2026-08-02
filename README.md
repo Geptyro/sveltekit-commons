@@ -229,6 +229,15 @@ passes through a snippet — and does not need to, because the variables cascade
 this. A site sets `--brand-w` on `:root` so the shell can line the page heading
 up with the content column below it.
 
+One more, set on `:root` rather than passed: `--rail-border` draws a rule down
+the rail's inner edge, and is `none` unless a site asks for it. Whether the nav
+needs dividing from the content depends on whether the two already differ in
+surface, which is the site's palette and not the shell's business — where they
+share one, the rail has no edge and its icons read as floating in the same field
+as the page. It applies to the wide state only; the narrow drawer keeps its own
+rule, where the line is not decoration but the edge of a panel lying over the
+page.
+
 ## Page chrome: `PageTitle` and `TabBar`
 
 The frame for a subject with more to say than one column can hold — an item's

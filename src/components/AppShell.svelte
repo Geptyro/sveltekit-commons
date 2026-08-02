@@ -456,6 +456,13 @@
 		flex: 0 0 var(--side-w);
 		display: flex;
 		flex-direction: column;
+		/* A rule down the rail's inner edge, off unless a site asks for it:
+		   whether the rail needs dividing from the content depends on whether
+		   the two already differ in surface, which is the site's palette and
+		   not this shell's business. Wide state only — the narrow drawer sets
+		   its own below, where the rule is not decoration but the edge of a
+		   panel lying over the page. */
+		border-right: var(--rail-border, none);
 		/* Once the scrollbar is hidden the rail gives no sign that it scrolls,
 		   so its edges carry it: a soft highlight pinned to the top and bottom
 		   of the box, each shown only while there is more content that way. */
