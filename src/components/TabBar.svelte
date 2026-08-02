@@ -61,15 +61,31 @@
 		 */
 		height = $bindable(0),
 		/**
-		 * Claim Tab/Shift+Tab and the number row for moving between tabs.
+		 * Claim `KeyQ` and `KeyE` — previous and next tab — and the number row.
 		 *
-		 * **Off by default, and think before turning it on.** Tab is the key that
-		 * moves focus, and taking it means anything inside the tab can no longer
-		 * be reached without a pointer. That is a trade worth making for a
-		 * reference people browse with a mouse, and not one worth making for a
-		 * site with forms, a basket or a checkout.
+		 * Bound by POSITION, not by character, exactly as the digits are: `KeyQ`
+		 * is the key an AZERTY keyboard prints "A" on and a QWERTY one prints
+		 * "Q" on, so the same two fingers work on both layouts and there is
+		 * nothing for a reader to configure. The hint names whatever their own
+		 * keyboard prints.
+		 *
+		 * **Off by default.** These are typing keys, so a page that takes them
+		 * has to be sure it is not somewhere people type: `claimable` stands
+		 * down inside inputs and while a dialog is open, but that is a floor,
+		 * not a licence. Right for a reference browsed with a mouse.
 		 */
 		shortcuts = false,
+		/**
+		 * Physical key codes for previous and next tab, when `shortcuts` is on.
+		 *
+		 * Props rather than constants, so the question of a settings page never
+		 * has to be answered here: a site that really does want its bindings
+		 * configurable already holds its own preferences and can pass them in.
+		 * Positional binding is what makes that unnecessary for almost everyone
+		 * — the defaults are already the same two fingers on every layout.
+		 */
+		prevKey = 'KeyQ',
+		nextKey = 'KeyE',
 		/** Where `shortcuts` sends the reader. Required for them to do anything. */
 		onnavigate = null,
 		class: klass = '',
@@ -94,9 +110,14 @@
 	function onkeydown(e) {
 		if (!claimable(e)) return;
 
-		if (e.key === 'Tab') {
+		/* Previous/next, by physical position — `KeyQ` and `KeyE` are "A" and
+		   "E" on AZERTY, "Q" and "E" on QWERTY. Neither is the key that moves
+		   focus, which is what lets this be offered at all: a Tab binding would
+		   have made everything inside the tab unreachable without a pointer. */
+		const step = e.code === prevKey ? -1 : e.code === nextKey ? 1 : 0;
+		if (step) {
+			if (e.shiftKey) return;
 			e.preventDefault();
-			const step = e.shiftKey ? -1 : 1;
 			const i = tabs.findIndex((t) => keyOf(t) === active);
 			onnavigate(tabs[(Math.max(i, 0) + step + tabs.length) % tabs.length].href);
 			return;
@@ -132,13 +153,20 @@
 	 * and a prerendered page is built on one that is nobody's.
 	 */
 	let keyCaps = $state([]);
+	/** What the two nav keys print here — "A"/"E" on AZERTY, "Q"/"E" on QWERTY. */
+	let navCaps = $state({ prev: 'Q', next: 'E' });
 	onMount(async () => {
 		if (!shortcuts) return;
 		try {
 			const map = await navigator.keyboard?.getLayoutMap?.();
-			if (map) keyCaps = Array.from({ length: 9 }, (_, i) => map.get(`Digit${i + 1}`) ?? '');
+			if (!map) return;
+			keyCaps = Array.from({ length: 9 }, (_, i) => map.get(`Digit${i + 1}`) ?? '');
+			navCaps = {
+				prev: (map.get(prevKey) || 'Q').toUpperCase(),
+				next: (map.get(nextKey) || 'E').toUpperCase()
+			};
 		} catch {
-			// unsupported or blocked; the digits below are already the answer
+			// unsupported or blocked; the defaults above are already the answer
 		}
 	});
 
@@ -173,7 +201,9 @@
 		{#if shortcuts && onnavigate}
 			<!-- The bar is the only place the binding is discoverable, so it says
 			     so — quietly, and only where there is room for it. -->
-			<span class="hint" aria-hidden="true"><kbd>Tab</kbd> next · <kbd>⇧Tab</kbd> back</span>
+			<span class="hint" aria-hidden="true"
+				><kbd>{navCaps.prev}</kbd> back · <kbd>{navCaps.next}</kbd> next</span
+			>
 		{/if}
 	</nav>
 {/if}

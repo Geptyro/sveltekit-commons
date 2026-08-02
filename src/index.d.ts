@@ -106,10 +106,17 @@ export type TabBarProps = {
 	/** Measured height, for a tab sizing itself against the rest of the window. */
 	height?: number;
 	/**
-	 * Claim Tab/Shift+Tab and the number row. Off by default: it takes the key
-	 * that moves focus, so anything inside the tab needs a pointer to reach.
+	 * Claim previous/next and the number row. Off by default: these are typing
+	 * keys, so only turn them on somewhere nobody types.
 	 */
 	shortcuts?: boolean;
+	/**
+	 * Physical code for the previous tab, bound by position — the default
+	 * `KeyQ` is the key marked "A" on AZERTY and "Q" on QWERTY.
+	 */
+	prevKey?: string;
+	/** Physical code for the next tab; `KeyE` is "E" on both layouts. */
+	nextKey?: string;
 	/** Where `shortcuts` sends the reader — `goto`, typically. */
 	onnavigate?: ((href: string) => void) | null;
 	[key: string]: unknown;

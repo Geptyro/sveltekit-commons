@@ -290,12 +290,24 @@ for where you are. STALZONE takes the default (its entities differ wildly in wha
 they can show); OpenGrocer passes `showAlone` (its three detail pages should look
 like each other). Neither ever draws an empty bar — no tabs is still nothing.
 
-`shortcuts` claims Tab/Shift+Tab and the number row (positionally, by `e.code`,
-so AZERTY needs no settings page; the caps come from `getLayoutMap` where it
-exists). **It is off by default and should stay off unless you mean it** — Tab
-is the key that moves focus, so taking it means nothing inside the tab can be
-reached without a pointer. Worth it for a reference people browse with a mouse;
-not worth it for a site with forms, a basket or a checkout.
+`shortcuts` claims two keys for previous/next tab, and the number row for going
+straight to one. All of it binds by POSITION, through `e.code` — the defaults
+`KeyQ`/`KeyE` are the key marked **A** on AZERTY and **Q** on QWERTY, and **E**
+on both, so it is the same two fingers everywhere and there is nothing for a
+reader to configure. `e.key` would have needed a settings page, because it
+reports what the cap says. The hint in the bar names the reader's own caps, from
+`getLayoutMap` where it exists.
+
+`prevKey`/`nextKey` override the codes. They are props so that the settings
+question never has to be answered in here: a site that genuinely wants its
+bindings configurable already holds its own preferences and can pass them
+through, and everyone else gets bindings that already work on their keyboard.
+
+**Off by default**, because they are typing keys: the guard stands down inside
+inputs, textareas, selects and `contenteditable`, and while any dialog is open,
+but that is a floor, not a licence. Deliberately *not* Tab — taking the key that
+moves focus would put everything inside the tab out of reach of a keyboard,
+which is a price worth nobody's convenience.
 
 Which tabs a subject gets is the site's business, not this component's. STALZONE
 derives them from capabilities (`src/lib/entities.ts`); OpenGrocer's product page
