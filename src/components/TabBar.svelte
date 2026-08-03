@@ -99,6 +99,17 @@
 		 */
 		prevKey = 'KeyQ',
 		nextKey = 'KeyE',
+		/**
+		 * Name TabSwipe's mouse gestures alongside the key hint, so the bar is the
+		 * one place every way of moving between tabs is written down.
+		 *
+		 * `'wheel'`, `'middle'` or `'both'` — whichever the page actually turned
+		 * on, since a hint for a gesture that does nothing is worse than none. The
+		 * wording lives here rather than in a caller's string so it stays the same
+		 * across sites, and it rides the same hint that already hides itself below
+		 * 900px, which is where these gestures stop existing anyway.
+		 */
+		gestures = null,
 		/** Where `shortcuts` sends the reader. Required for them to do anything. */
 		onnavigate = null,
 		class: klass = '',
@@ -217,12 +228,68 @@
 			</a>
 		{/each}
 
-		{#if shortcuts && onnavigate}
-			<!-- The bar is the only place the binding is discoverable, so it says
-			     so — quietly, and only where there is room for it. -->
-			<span class="hint" aria-hidden="true"
-				><kbd>{navCaps.prev}</kbd> back · <kbd>{navCaps.next}</kbd> next</span
-			>
+		{#if (shortcuts && onnavigate) || gestures}
+			<!-- The bar is the only place any of this is discoverable, so it says
+			     so — and the separators are drawn by CSS between whichever pieces
+			     turned out to exist, rather than written between them by hand. -->
+			<span class="hint" aria-hidden="true">
+				{#if shortcuts && onnavigate}
+					<span class="bit"><kbd>{navCaps.prev}</kbd> back</span>
+					<span class="bit"><kbd>{navCaps.next}</kbd> next</span>
+				{/if}
+				{#if gestures}
+					<!-- One piece, not two. Both mouse gestures live on the same
+					     hardware and mean the same move, so they read as one thing
+					     you can do two ways rather than as two separate tricks.
+
+					     The mouse says which button better than the word does, and
+					     the button it means is the one lit up. The arrows say the
+					     axis and nothing about how you produce it — `Shift` was in
+					     here as the way a plain wheel does it, and it read as a hint
+					     about scrolling rather than about tabs. -->
+					<span class="bit">
+						{#if gestures === 'middle' || gestures === 'both'}
+							<svg class="mouse" viewBox="0 0 16 22" width="13" height="18">
+								<rect
+									x="1"
+									y="1"
+									width="14"
+									height="20"
+									rx="7"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.5"
+								/>
+								<!-- the line the two buttons sit on, so the shape reads as a
+								     mouse and not a pill -->
+								<path d="M1.6 9.6 H14.4" stroke="currentColor" stroke-width="1.2" opacity="0.45" />
+								<rect class="mb" x="6.1" y="2.2" width="3.8" height="7.4" rx="1.9" />
+							</svg>
+							drag
+						{/if}
+						{#if gestures === 'both'}<span class="plus">+</span>{/if}
+						{#if gestures === 'wheel' || gestures === 'both'}
+							<svg class="axis" viewBox="0 0 22 12" width="17" height="10">
+								<path
+									d="M4.6 3.2 L1.6 6 L4.6 8.8 M17.4 3.2 L20.4 6 L17.4 8.8"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+								<path
+									d="M2.2 6 H19.8"
+									stroke="currentColor"
+									stroke-width="1.6"
+									stroke-linecap="round"
+								/>
+							</svg>
+							scroll
+						{/if}
+					</span>
+				{/if}
+			</span>
 		{/if}
 	</nav>
 {/if}
@@ -294,42 +361,85 @@
 	}
 
 	/* the number key that jumps straight here, worn on the tab it belongs to */
+	/* Raised with the hint at the far end, so the two ways of naming a key are
+	   the same size wherever they appear. 9px was small enough to read as a
+	   smudge beside an uppercase label rather than as a number. */
 	.cap {
 		font-family: var(--font-mono);
-		font-size: 9px;
-		line-height: 1;
-		padding: 2px 3px;
+		font-size: 10.5px;
+		line-height: 1.4;
+		padding: 1px 4px;
 		border-radius: var(--radius-1);
 		background: var(--surface-raised);
-		color: var(--text-faint);
-	}
-
-	.tabs a[aria-current='page'] .cap {
 		color: var(--text-dim);
 	}
 
-	/* pushed to the far end and kept quiet: a hint, not a control */
+	.tabs a[aria-current='page'] .cap {
+		color: var(--text);
+	}
+
+	/* Legible, not loud. It was 10px in `--text-faint`, which on a bar of
+	   uppercase tabs read as something the eye was meant to skip — and a hint
+	   nobody reads is a feature nobody finds. One step up in size and one in
+	   contrast is enough; it is still the quietest thing in the bar. */
 	.hint {
 		margin-left: auto;
 		align-self: center;
 		padding-left: var(--space-3);
 		flex: none;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
 		font-family: var(--font-mono);
-		font-size: 10px;
+		font-size: 11.5px;
 		letter-spacing: 0.04em;
 		text-transform: none;
-		color: var(--text-faint);
+		color: var(--text-dim);
 		white-space: nowrap;
+	}
+
+	.bit {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+	/* between whichever pieces exist, and never at either end */
+	.bit + .bit::before {
+		content: '·';
+		margin-right: 2px;
+		color: var(--text-faint);
 	}
 
 	.hint kbd {
 		font-family: var(--font-mono);
-		font-size: 10px;
-		border: var(--border-width) solid var(--border);
+		font-size: 11.5px;
+		line-height: 1.5;
+		border: var(--border-width) solid var(--border-strong);
 		border-radius: var(--radius-1);
-		padding: 0 0.35em;
-		margin-left: 2px;
-		color: var(--text-faint);
+		padding: 0 0.4em;
+		color: var(--text);
+	}
+
+	/* The mark reads at 16px because it is only an outline and one lit button:
+	   the shell is `currentColor` so it sits in the hint's own weight, and the
+	   button is the accent, which is the same colour the active tab is
+	   underlined in. */
+	.mouse,
+	.axis {
+		flex: none;
+	}
+	/* The join, and it has to carry: it is the difference between two ways of
+	   doing one thing and one thing done two ways at once. Held at the accent
+	   and a size up, since the pieces either side are already quiet. */
+	.plus {
+		color: var(--accent);
+		font-size: 14px;
+		font-weight: 700;
+		line-height: 1;
+		margin: 0 2px;
+	}
+	.mouse .mb {
+		fill: var(--accent);
 	}
 
 	/* Icons only, at the width where AppShell drops its own labels and folds the

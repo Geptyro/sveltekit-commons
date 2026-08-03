@@ -140,6 +140,12 @@ export type TabBarProps = {
 	prevKey?: string;
 	/** Physical code for the next tab; `KeyE` is "E" on both layouts. */
 	nextKey?: string;
+	/**
+	 * Name TabSwipe's mouse gestures beside the key hint — pass whichever the
+	 * page actually turned on, since a hint for a gesture that does nothing is
+	 * worse than none. Hidden below 900px, along with the rest of the hint.
+	 */
+	gestures?: 'wheel' | 'middle' | 'both' | null;
 	/** Where `shortcuts` sends the reader — `goto`, typically. */
 	onnavigate?: ((href: string) => void) | null;
 	[key: string]: unknown;
@@ -162,10 +168,25 @@ export type TabSwipeProps = {
 	 * entry stays router-free.
 	 */
 	preload?: ((href: string) => unknown) | null;
-	/** At or above this width the gesture is off. Match AppShell's `wideAt`. */
+	/**
+	 * At or above this width the *finger's* swipe is off. Match AppShell's
+	 * `wideAt`. The mouse gestures ignore it — they are for those widths.
+	 */
 	upTo?: number;
 	/** Fraction of the window a pull must cross to commit. */
 	commitAt?: number;
+	/**
+	 * Horizontal scroll changes tab once whatever is under the cursor has no
+	 * sideways travel left — a trackpad's two fingers, a wheel that tilts, or
+	 * `Shift` and any wheel at all. On by default.
+	 */
+	wheel?: boolean;
+	/**
+	 * Hold the middle button and move sideways. **Off by default:** it costs the
+	 * browser's autoscroll for the whole site. A plain middle click still opens
+	 * a link in a new tab — only a drag is swallowed.
+	 */
+	middle?: boolean;
 };
 /**
  * Swipe the page sideways between a subject's tabs — TabBar's companion, for

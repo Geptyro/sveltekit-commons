@@ -48,8 +48,31 @@
 	 *      work is under "Handing the gesture back" below — it is not the obvious
 	 *      way, because the obvious way does not work.
 	 *
-	 * The gesture is narrow-screen only. On a desktop the tabs are labelled, the
-	 * bar is a wide row of targets, and there is nothing a drag would improve.
+	 * The finger's version is narrow-screen only. On a desktop the tabs are
+	 * labelled and the bar is a wide row of targets, so a drag adds nothing —
+	 * but the same motion on a mouse does, and there are two of those below.
+	 *
+	 * ── The same move on a desktop ───────────────────────────────────────
+	 *
+	 * `wheel` is the one that costs nothing and reaches everyone. Chrome reports
+	 * the three ways of asking for horizontal scroll differently, which is worth
+	 * knowing before reading the handler:
+	 *
+	 *   trackpad, two fingers   deltaX          scrolls sideways
+	 *   a wheel that tilts      deltaX          scrolls sideways
+	 *   Shift + a plain wheel   deltaY + shift  scrolls sideways
+	 *
+	 * The third is the important one: it means this works on any mouse ever
+	 * made, not only the ones with a tilt. And unlike a `pointermove`, a `wheel`
+	 * event is cancelable — `preventDefault` genuinely stops the scroll. So the
+	 * edge negotiation here is the plain thing the touch path had to go the long
+	 * way round for: ask the scroller under the cursor whether it has travel, and
+	 * either leave the event alone or take it.
+	 *
+	 * `middle` is off by default, because it is not free: holding the middle
+	 * button is the browser's autoscroll on Windows and Linux, and arming this
+	 * takes that away for the whole site. A plain middle click still opens links
+	 * in a new tab — only a click that turned into a drag is swallowed.
 	 */
 	import { onMount } from 'svelte';
 
@@ -69,13 +92,30 @@
 		 * stays router-free and the Electron companion can still use it.
 		 */
 		preload = null,
-		/** At or above this width the gesture is off. Match AppShell's `wideAt`. */
+		/**
+		 * At or above this width the *finger's* swipe is off. Match AppShell's
+		 * `wideAt`. The mouse gestures below ignore it — they are for exactly the
+		 * screens this excludes.
+		 */
 		upTo = 900,
 		/**
 		 * How far across the window the pull has to travel to commit, as a
 		 * fraction of it. A throw commits from anywhere.
 		 */
-		commitAt = 0.3
+		commitAt = 0.3,
+		/**
+		 * Horizontal scroll — a trackpad's two fingers, a wheel that tilts, or
+		 * `Shift` and any wheel at all — moves between tabs once whatever is under
+		 * the cursor has no sideways travel left. On by default: it takes only the
+		 * scrolling nothing else wanted.
+		 */
+		wheel = true,
+		/**
+		 * Hold the middle button and move sideways. **Off by default** — it costs
+		 * the browser's autoscroll for the whole site, which is a real thing to
+		 * spend and the caller's to decide.
+		 */
+		middle = false
 	} = $props();
 
 	const SLOP = 14; /* px before a touch is a swipe — larger than the drawer's,
@@ -84,6 +124,10 @@
 	const FLICK = 0.5; /* px/ms that commits regardless of distance */
 	const STALE = 100; /* ms; a finger that paused before lifting threw nothing */
 	const NUDGE = 34; /* px the column gives, at the limit of a very long pull */
+	const WHEEL_COMMIT = 220; /* accumulated delta that turns the page */
+	const WHEEL_END = 140; /* ms of quiet that ends a wheel gesture — it has no
+	                          "up" event, so the only end is stopping */
+	const WHEEL_QUIET = 200; /* ms of stillness that ends the lock after a commit */
 
 	const keyOf = (t) => t.key ?? t.href;
 	const at = $derived(tabs.findIndex((t) => keyOf(t) === active));
@@ -100,8 +144,100 @@
 	let dir = $state(0); /* +1 pulling right, toward `prev`; -1 toward `next` */
 	let p = $state(0); /* 0 → 1, where 1 is far enough to commit */
 
+	/* Where the hand is, and how much room it has. The indicator is drawn at the
+	   pointer rather than at the screen's edge, which means it has to be told
+	   both — and the awkward part is that the direction you are travelling is
+	   the direction the room runs out in. */
+	let ptrX = $state(0);
+	let ptrY = $state(0);
+	let byTouch = $state(false);
+	/* the content's left edge, which is not the window's: AppShell's rail and
+	   its docked sidebar are outside `main`. Measured once per gesture. */
+	let safeL = $state(0);
+
+	const CHEVRONS = 5;
+	/* Clearance either side of the pointer. The two halves used to start almost
+	   on top of it, which on a touch screen puts the first chevron under the
+	   edge of the thumb and leaves the whole composition looking like one
+	   crowded lump. Held apart, the anchor reads as the thing the two halves
+	   are arranged around. */
+	const MARK_GAP = 34;
+	const NAME_GAP = 30;
+	/* How far the run reaches at this pull, in step with the geometry below. */
+	const reach = $derived(MARK_GAP + 4 * (13 + p * 9) + 16 * 1.3);
+	/* Near enough for the clamp; the plate sizes itself from its own text. */
+	const nameW = $derived((target?.label?.length ?? 8) * 7.4 + 52);
+
+	/**
+	 * The anchor, and which side of it the name sits on.
+	 *
+	 * Clamped rather than flipped. Putting the run on the other side of the
+	 * pointer when it runs out of room would move the thing being tracked
+	 * mid-gesture; holding the whole composition inside the safe rect keeps it
+	 * on screen without ever jumping, and only bites over the last stretch of a
+	 * pull toward an edge.
+	 *
+	 * The name sits on the far side of the anchor from the run: chevrons lead
+	 * away in the direction of travel, the name stays back where the hand is.
+	 * Putting it out past the last chevron instead was tried and is worse in
+	 * two ways — it reads as one long streak rather than as a thing being
+	 * pulled toward somewhere, and it stacks the whole 240px composition on one
+	 * side of the pointer, which the clamp then has to drag back off the finger
+	 * almost immediately. Straddling the anchor halves the width that has to
+	 * fit, so the indicator stays where the hand is for nearly all of a pull.
+	 */
+	const anchor = $derived.by(() => {
+		if (!target) return { x: 0, y: 0, side: -dir };
+		const pad = 10;
+		const right = innerWidth - pad;
+		const left = safeL + pad;
+
+		const side = -dir;
+		const fwd = reach;
+		const back = NAME_GAP + nameW;
+		const lo = ptrX - (dir < 0 ? fwd : back);
+		const hi = ptrX + (dir < 0 ? back : fwd);
+		const shift = lo < left ? left - lo : hi > right ? right - hi : 0;
+
+		/* What the backdrop has to cover, measured from the anchor rather than
+		   guessed at: the run and the name are not symmetrical about it, and a
+		   veil centred on the anchor would sit half off the thing it is meant to
+		   be lifting off the page. */
+		const vLo = lo - ptrX - shift;
+		const vHi = hi - ptrX - shift;
+
+		/* a finger covers what it is pointing at, so the whole thing lifts clear
+		   of the contact point; a mouse cursor hides nothing */
+		return {
+			x: ptrX + shift,
+			y: ptrY - (byTouch ? 52 : 0),
+			side,
+			vx: (vLo + vHi) / 2,
+			vw: vHi - vLo + 104
+		};
+	});
+
+	/** The five marks, all of it derived from the pull. */
+	const marks = $derived.by(() => {
+		const step = 13 + p * 9;
+		return Array.from({ length: CHEVRONS }, (_, i) => {
+			const frac = Math.min(1, Math.max(0, p * CHEVRONS - i));
+			const a = (5 + i * 1.9) * (0.58 + 0.42 * p);
+			return {
+				i,
+				x: MARK_GAP + i * step + i * i * 1.3,
+				a,
+				w: (1.9 + i * 0.3) * (0.7 + 0.3 * p),
+				alpha: frac > 0 ? 0.26 + 0.6 * frac : 0.1
+			};
+		});
+	});
+	const boxW = $derived(reach + 26);
+	const boxH = $derived(2 * ((5 + 4 * 1.9) * 1 + 6));
+
 	let pid = null;
 	let armed = false;
+	let mid = false; /* this drag is the middle button's, not a finger's */
 	let blocker = null; /* the sideways scroller the finger came down inside */
 	let x0 = 0;
 	let y0 = 0;
@@ -175,6 +311,11 @@
 	 * Directional `touch-action` is Chromium-only. Elsewhere the declaration is
 	 * invalid and dropped, the scroller keeps `auto`, and the swipe simply does
 	 * not start from inside a table — which is exactly where this stood before.
+	 *
+	 * None of this is needed by the mouse. A `wheel` is cancelable and a middle
+	 * drag scrolls nothing, so both just ask `claimant` and `hasTravel` at the
+	 * moment they need an answer. The marking is the finger's tax alone, and it
+	 * is skipped entirely on a screen too wide for the finger's swipe.
 	 */
 	let marked = [];
 
@@ -226,6 +367,9 @@
 		return found;
 	}
 
+	/** True when there are tabs to move between and somewhere to send them. */
+	const live = () => !!onnavigate && tabs.length > 1;
+
 	function down(e) {
 		reset();
 		/* First, and past every guard below. An armed swipe calls preventDefault
@@ -233,18 +377,35 @@
 		   produced never arrives — so the flag set on release has nothing to
 		   spend itself on, and would be lying in wait for the next real tap. */
 		swallow = false;
-		if (!onnavigate || tabs.length < 2 || innerWidth >= upTo) return;
-		if (e.pointerType === 'mouse' && e.button !== 0) return;
+		if (!live()) return;
+
+		/* The middle button is a gesture of its own, and not a narrow-screen one:
+		   it exists for the widths the finger's swipe stands down at. */
+		const isMiddle = e.button === 1 && e.pointerType === 'mouse';
+		if (isMiddle ? !middle : innerWidth >= upTo || (e.pointerType === 'mouse' && e.button !== 0))
+			return;
 		/* the shell's chrome lives outside `main`; so does the drawer it drags */
 		if (!e.target?.closest?.('main')) return;
 		const claim = claimant(e.target);
 		if (claim === 'never') return;
-		blocker = claim;
+		/* A middle drag scrolls nothing, so a scroller has no claim on it — it can
+		   start over a table mid-scroll and still turn the page. Only the outright
+		   refusals above apply. */
+		blocker = isMiddle ? null : claim;
+		mid = isMiddle;
+		if (isMiddle) {
+			/* what stops the autoscroll cursor appearing and taking the pointer */
+			e.preventDefault();
+		}
 		pid = e.pointerId;
 		x0 = lastX = e.clientX;
 		y0 = e.clientY;
 		lastT = e.timeStamp;
 		vx = 0;
+		byTouch = e.pointerType !== 'mouse';
+		/* measured once, here: the content's left edge does not move during a
+		   gesture, and reading layout on every move would be a reflow per frame */
+		safeL = e.target.closest('main')?.getBoundingClientRect().left ?? 0;
 	}
 
 	function move(e) {
@@ -276,8 +437,14 @@
 			Promise.resolve(preload?.(t.href)).catch(() => {});
 		}
 
+		ptrX = e.clientX;
+		ptrY = e.clientY;
 		const travelled = dir * (e.clientX - x0);
-		p = Math.min(1, Math.max(0, travelled / (innerWidth * commitAt)));
+		/* A fraction of the window is right for a thumb on a phone and absurd on
+		   a 27-inch monitor, where it would ask for half a metre of mouse. The
+		   cap is what a wrist does without moving the arm. */
+		const full = mid ? Math.min(innerWidth * commitAt, 220) : innerWidth * commitAt;
+		p = Math.min(1, Math.max(0, travelled / full));
 		/* Asymptotic, so the column answers immediately and then firms up: it is
 		   giving under the pull, not being dragged. */
 		const give = dir * NUDGE * (1 - 1 / (1 + Math.max(0, travelled) / NUDGE));
@@ -308,6 +475,7 @@
 	function reset() {
 		pid = null;
 		blocker = null;
+		mid = false;
 		if (armed) {
 			armed = false;
 			const root = document.documentElement;
@@ -325,12 +493,136 @@
 	}
 
 	/* Capture, and immediate: a swipe that came to rest on a link would follow
-	   it, on top of the tab change the swipe already asked for. */
+	   it, on top of the tab change the swipe already asked for. `auxclick` is
+	   the same story for the middle button, where following the link means a
+	   new tab — and only a drag is swallowed, so a plain middle click on a link
+	   still opens one. */
 	function click(e) {
 		if (!swallow) return;
 		swallow = false;
 		e.preventDefault();
 		e.stopImmediatePropagation();
+	}
+
+	/* ── The wheel ────────────────────────────────────────────────────────
+	 *
+	 * A wheel gesture has no beginning and no end, only a stream — so this
+	 * accumulates, and calls the stream over when it goes quiet. Everything else
+	 * is the drag's: the same neighbours, the same peek, the same nudge.
+	 *
+	 * The direction is the finger's, inverted. `deltaX` above zero is a scroll
+	 * to the right, which moves the content left, which is the hand pulling the
+	 * page toward the next tab.
+	 */
+	let acc = 0;
+	let wheelEnd = null;
+	let locked = null; /* null | 'spent' | 'scroller' */
+	let lockTimer = null;
+
+	/**
+	 * Who owns the rest of this wheel gesture, until it goes quiet.
+	 *
+	 * `'spent'` — a tab was just turned. Everything further is swallowed, or one
+	 * flick walks the whole bar. A fixed lockout cannot do this, which took a
+	 * measurement to believe: a throw keeps arriving for as long as the momentum
+	 * lasts, and one flick went three tabs past a 450ms window. What ends a
+	 * gesture is not a duration, it is stillness.
+	 *
+	 * `'scroller'` — something under the cursor had travel and was given the
+	 * event. It keeps the whole gesture, not merely the part it could spend:
+	 * otherwise one long throw runs a table to its last column and then turns
+	 * the page as well, which is two answers to one movement. Stop, and the next
+	 * flick is the page's.
+	 */
+	function hold(kind) {
+		locked = kind;
+		clearTimeout(lockTimer);
+		lockTimer = setTimeout(() => (locked = null), WHEEL_QUIET);
+	}
+
+	function onWheel(e) {
+		if (!wheel || !live()) return;
+		/* The rest of a gesture already spoken for. Swallowed if a tab was
+		   turned; passed straight through if a scroller has it, since taking it
+		   back would stop the very scrolling it was handed over for. */
+		if (locked) {
+			if (locked === 'spent') e.preventDefault();
+			hold(locked);
+			return;
+		}
+
+		/* Sideways, however it was asked for. Shift with a plain wheel reports a
+		   vertical delta and scrolls horizontally, which is the only reason this
+		   works on a mouse without a tilt. */
+		const dx = e.deltaX || (e.shiftKey ? e.deltaY : 0);
+		if (!dx || (!e.shiftKey && Math.abs(e.deltaX) <= Math.abs(e.deltaY))) return end();
+		if (!e.target?.closest?.('main')) return end();
+
+		/* Two directions here, and they are not the same one.
+
+		   `scroll` is where the content would actually go, and it is the only
+		   thing a scroller can be asked about: `deltaX` above zero scrolls right,
+		   which moves the content left.
+
+		   `d` is which tab, and it deliberately does NOT follow the scroll. It
+		   follows the hand, so that every input on the page agrees on one rule —
+		   a gesture from right to left brings the next tab in, whether that is a
+		   thumb, the middle button, or a wheel. Reading it off the scroll instead
+		   is defensible and was the first cut, but it means the same physical
+		   movement changes tabs one way on a phone and the other on a desktop,
+		   and which of the two a given movement produces is the reader's
+		   natural-scrolling setting rather than anything this can know. */
+		const scroll = dx > 0 ? -1 : 1;
+		const d = -scroll;
+		const claim = claimant(e.target);
+		if (claim === 'never') return end();
+		/* the plain version of the whole touch-action apparatus: a cancelable
+		   event, asked at the moment it matters — and asked about the scroll,
+		   not the tab */
+		if (claim && hasTravel(claim, scroll)) {
+			hold('scroller');
+			return end();
+		}
+
+		const t = d > 0 ? prev : next;
+		if (!t) return end();
+
+		e.preventDefault();
+		/* the wheel has no drag, so the cursor is wherever it already was */
+		ptrX = e.clientX;
+		ptrY = e.clientY;
+		byTouch = false;
+		if (d !== dir || !armed) {
+			acc = 0;
+			armed = true;
+			dir = d;
+			target = t;
+			safeL = e.target.closest('main')?.getBoundingClientRect().left ?? 0;
+			document.documentElement.dataset.tabSwipe = '';
+			Promise.resolve(preload?.(t.href)).catch(() => {});
+		}
+		acc += Math.abs(dx);
+		p = Math.min(1, acc / WHEEL_COMMIT);
+		const give = dir * NUDGE * (1 - 1 / (1 + acc / NUDGE));
+		document.documentElement.style.setProperty('--tab-swipe-x', `${give}px`);
+
+		clearTimeout(wheelEnd);
+		if (p >= 1) {
+			const href = target.href;
+			hold('spent');
+			acc = 0;
+			reset();
+			onnavigate(href);
+		} else {
+			wheelEnd = setTimeout(end, WHEEL_END);
+		}
+	}
+
+	/** The wheel went quiet, or turned out not to be ours. */
+	function end() {
+		clearTimeout(wheelEnd);
+		acc = 0;
+		if (armed && pid === null) reset();
 	}
 
 	onMount(() => {
@@ -342,6 +634,8 @@
 		addEventListener('pointerup', up, opts);
 		addEventListener('pointercancel', reset, opts);
 		addEventListener('click', click, true);
+		addEventListener('auxclick', click, true);
+		addEventListener('wheel', onWheel, opts);
 
 		/* Capture, because `scroll` does not bubble: one listener then hears
 		   every scroller under the document instead of one per element, and
@@ -386,7 +680,11 @@
 			removeEventListener('pointerup', up, opts);
 			removeEventListener('pointercancel', reset, opts);
 			removeEventListener('click', click, true);
+			removeEventListener('auxclick', click, true);
+			removeEventListener('wheel', onWheel, opts);
 			removeEventListener('scroll', onScroll, true);
+			clearTimeout(wheelEnd);
+			clearTimeout(lockTimer);
 			mo.disconnect();
 			ro.disconnect();
 			sizes.disconnect();
@@ -400,66 +698,186 @@
 	});
 </script>
 
-<!-- Named, because the gesture is worth nothing if you cannot tell what you are
-     about to land on. It arrives from the edge the page is heading toward and
-     goes solid the moment the pull is far enough to commit, so the release
-     point is something you can see rather than guess. -->
+<!--
+	A sweep out of the edge the page is heading for, and the name of what is
+	behind it.
+
+	The gesture is worth nothing if you cannot tell where you are about to land,
+	and it is worth little if you cannot tell how much further to pull. This says
+	both at once: the disc's centre sits exactly on the screen's edge, so it
+	reads as something arriving from off-screen, which is what the next tab
+	literally is — and the swept angle is the progress, half a turn being the
+	release point. Nothing here is a target; it is a picture of the gesture.
+-->
 {#if target}
 	<div
-		class="peek"
-		class:right={dir < 0}
+		class="swipe"
+		class:back={dir < 0}
 		class:ready={p >= 1}
-		style="--p: {p}"
+		style="--p: {p}; --x: {anchor.x}px; --y: {anchor.y}px; --vx: {anchor.vx}px; --vw: {anchor.vw}px; --lx: {anchor.side *
+			(anchor.side === dir ? reach + NAME_GAP + 2 + nameW / 2 : NAME_GAP + 2 + nameW / 2)}px"
 		aria-hidden="true"
 	>
-		{#if target.icon}{@html target.icon}{/if}
-		<span>{target.label}</span>
+		<!-- First, so it sits under the rest: the page dimmed and blurred just
+		     where the indicator is, which is what lets thin strokes read over a
+		     column of figures without either of them being made louder. -->
+		<div class="veil"></div>
+		<!-- Drawn pointing right and mirrored for the other direction, so there is
+		     one set of numbers rather than two that can drift apart. -->
+		<svg class="marks" width={boxW} height={boxH} viewBox="0 {-boxH / 2} {boxW} {boxH}">
+			{#each marks as m (m.i)}
+				<path
+					class="mark"
+					style="--a: {m.alpha}; --w: {m.w}; --i: {m.i}"
+					d="M{m.x - m.a * 0.7} {-m.a} L{m.x + m.a * 0.7} 0 L{m.x - m.a * 0.7} {m.a}"
+				/>
+			{/each}
+		</svg>
+		<span class="name">
+			{#if target.icon}{@html target.icon}{/if}
+			<span>{target.label}</span>
+		</span>
 	</div>
 {/if}
 
 <style>
-	.peek {
+	/* A point, not a box: the marks and the name position themselves against it,
+	   and it sits wherever the hand is. Nothing here is a target. */
+	.swipe {
 		position: fixed;
-		top: 50%;
+		left: var(--x);
+		top: var(--y);
+		width: 0;
+		height: 0;
 		z-index: 30;
+		pointer-events: none;
+		color: var(--accent);
+	}
+
+	/* The page, dimmed and blurred, only where the indicator is.
+
+	   Thin accent strokes over a table of figures are a contrast problem that
+	   has two bad answers — a heavier stroke, or a plate the shape of a box —
+	   and one good one: take the busyness out of the background instead. The
+	   radial mask is what keeps it from reading as a box. `closest-side` makes
+	   the fade elliptical to match, so it has no edge anywhere, and it carries
+	   the backdrop filter with it rather than clipping it to a rectangle.
+
+	   Widest at the commit, faint at the start: at a tenth of a pull there is
+	   almost nothing to see through it, and dimming the page for that would be
+	   a bigger statement than the gesture has earned. */
+	.veil {
+		position: absolute;
+		top: 0;
+		left: var(--vx);
+		width: var(--vw);
+		height: calc(78px + 34px * var(--p));
+		transform: translate(-50%, -50%);
+		border-radius: 999px;
+		background: rgb(4 6 2 / 0.52);
+		backdrop-filter: blur(7px) saturate(0.75);
+		-webkit-backdrop-filter: blur(7px) saturate(0.75);
+		-webkit-mask-image: radial-gradient(closest-side, #000 52%, transparent 100%);
+		mask-image: radial-gradient(closest-side, #000 52%, transparent 100%);
+		opacity: calc(0.25 + 0.75 * var(--p));
+	}
+
+	/* Drawn pointing right; the other direction is the same drawing mirrored
+	   about the anchor, which is why `back` moves the box to the anchor's left
+	   and flips it rather than re-deriving every number with the sign changed. */
+	.marks {
+		position: absolute;
+		top: 50%;
+		left: 0;
+		transform: translateY(-50%);
+		overflow: visible;
+	}
+	.swipe.back .marks {
+		left: auto;
+		right: 0;
+		transform: translateY(-50%) scaleX(-1);
+	}
+
+	.mark {
+		fill: none;
+		stroke: currentColor;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: var(--w);
+		opacity: var(--a);
+		/* A crest travelling outward, not five arrows breathing together. The
+		   keyframes sit low for most of the cycle and spike briefly, because a
+		   plain ease leaves everything half-lit at once and reads as a glow
+		   rather than as motion — and the stagger is what makes the bright spot
+		   move away from the hand instead of pulsing in place.
+
+		   All the delays are negative so every mark is already mid-cycle on the
+		   first frame; a positive delay would hold the run dark until its turn
+		   came round, which on a gesture this short is most of it. */
+		animation: crest 1480ms linear infinite;
+		animation-delay: calc((var(--i) - 5) * 223ms);
+	}
+	@keyframes crest {
+		0%,
+		68% {
+			opacity: calc(var(--a) * 0.72);
+			stroke-width: calc(var(--w) * 0.86);
+		}
+		84% {
+			opacity: calc(var(--a) * 1.5);
+			stroke-width: calc(var(--w) * 1.18);
+		}
+		100% {
+			opacity: calc(var(--a) * 0.72);
+			stroke-width: calc(var(--w) * 0.86);
+		}
+	}
+
+	/* Far enough to commit: the run stops pulsing and goes solid, so the release
+	   point is something you see rather than something you judge. */
+	.swipe.ready .mark {
+		animation: none;
+		opacity: 1;
+		stroke-width: calc(var(--w) * 1.15);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.mark {
+			animation: none;
+		}
+	}
+
+	/* On its own plate, because it has to stay readable over whatever the page
+	   happens to have under it — a text shadow was not close to enough against a
+	   column of figures. `--lx` is where the anchor decided it fits: ahead of the
+	   run normally, tucked behind it when the edge is too close. */
+	.name {
+		position: absolute;
+		top: 0;
+		left: var(--lx);
+		transform: translate(-50%, -50%);
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-		padding: 8px 12px;
-		max-width: 60vw;
-		border: var(--border-width) solid var(--border);
-		border-radius: var(--radius-3);
-		background: var(--surface-raised);
+		padding: 6px 10px;
+		border: var(--border-width) solid color-mix(in srgb, var(--accent) 40%, transparent);
+		border-radius: var(--radius-2);
+		background: color-mix(in srgb, var(--surface-sunken) 88%, transparent);
 		box-shadow: var(--shadow-2);
-		color: var(--text-dim);
+		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		white-space: nowrap;
-		/* it is a label on a gesture, never a target */
-		pointer-events: none;
-		opacity: calc(0.35 + 0.65 * var(--p));
+		opacity: calc(0.45 + 0.55 * var(--p));
 	}
-
-	/* Rides in from whichever edge the page is heading for. The rail is the
-	   left one on a phone, so the backward peek starts clear of it. */
-	.peek.right {
-		right: 0;
-		transform: translate(calc((1 - var(--p)) * 100%), -50%);
-	}
-	.peek:not(.right) {
-		left: var(--rail-w, 0px);
-		transform: translate(calc((var(--p) - 1) * 100%), -50%);
-	}
-
-	.peek.ready {
+	.swipe.ready .name {
 		border-color: var(--accent);
-		color: var(--text);
 	}
 
 	/* `:global` because the glyph arrives by `{@html}` */
-	.peek :global(svg) {
+	.name :global(svg) {
 		width: 15px;
 		height: 15px;
 		flex: none;
