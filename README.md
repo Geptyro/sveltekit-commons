@@ -217,23 +217,51 @@ still a tap, and a drag that happens to end on a nav row does not follow it.
 `--drawer-w` is how far it opens, `min(280px, 82vw)` unless a site says
 otherwise.
 
-The collapse is done entirely with custom properties: `.shell` declares the
-collapsed geometry and the two expanded states override it, so the rail width,
-the label visibility, the icon size and the burger's own glyph all read the
-same variables and transition together. Nothing toggles a class per row and
-nothing measures anything.
+**The collapse narrows one box and clips.** A nav row's geometry does not depend
+on the state — same icon size, same paddings, same height, icon in the same
+place to the pixel — so collapsing animates `--side-w` and nothing else. The
+labels go because the box they sit in got narrower than they are, and the row is
+`overflow: hidden`, so they slide out behind the icons instead of being switched
+off. (It used to re-lay-out the list: `--label-display: none` took every label
+out of flow on frame one, the justification flipped to centre, the paddings and
+icon sizes changed, and the column shifted sideways while the width caught up.)
 
-That is also what makes it work as a package. Svelte scopes styles to the
-component that declares the markup, so `AppShell` cannot style what a caller
-passes through a snippet — and does not need to, because the variables cascade:
+What holds it together is an identity between four of the variables, so that a
+left-aligned row **is** a centred one once the box is a rail:
+
+```
+--side-pad-x + --nav-pad-x + --nav-slot / 2  ==  --rail-w / 2
+```
+
+Everything lands on the burger's 34px box: a row's pill in the rail is 34×34,
+square, directly under a burger that is the same square, and the docked rail's
+width is derived from `--burger-w` and `--top-pad-x` so the two cannot drift.
+Change one of the four and check the identity still holds, or the icons sit off
+the rail's axis.
+
+That variables-not-classes approach is also what makes it work as a package.
+Svelte scopes styles to the component that declares the markup, so `AppShell`
+cannot style what a caller passes through a snippet — and does not need to,
+because the variables cascade:
 
 | variable | |
 |---|---|
-| `--label-display` | `none` in the rail, `block` expanded — put it on anything that should fold away |
+| `--label-display` | `none` in the rail, `block` expanded. For footer prose, which cannot be clipped gracefully — nav rows no longer use it, they clip |
+| `--foot-align` | `center` in the rail, `flex-start` expanded — the footer's marks stack on the icons' axis when the rail is all there is. `--nav-justify` is the old name and still tracks it, for callers drawing their own rail widgets |
 | `--nav-slot` / `--nav-glyph` | icon column width / icon size |
-| `--nav-pad-x` / `--nav-pad-y` / `--nav-justify` | row padding and alignment |
+| `--nav-tile` | the square a picture icon is drawn at — the row's full height, so a portrait fills the pill instead of sitting in it |
+| `--nav-pad-x` / `--nav-pad-y` | row padding |
 | `--label-align` | alignment for group headings |
 | `--foot-dir` | footer stacking direction |
+
+`NavItem` draws an `<img>` icon at `--nav-tile`, out of flow and centred, rather
+than at `--nav-slot` like an `<svg>`: a picture is the tile, not a mark drawn on
+one. Both lengths are stated explicitly and that is not optional — an
+out-of-flow **replaced** element with `width: auto` takes its intrinsic size and
+ignores the offsets meant to stretch it, so the obvious way to write this hands a
+128px portrait its full 128px and lets the row's overflow crop it to a letterbox.
+Because a filled tile covers the background that marks a row, such an icon
+carries its own hover and active ring.
 
 `NavItem` and `NavSection` already read them, so the common cases need none of
 this. A site sets `--brand-w` on `:root` so the shell can line the page heading
@@ -336,8 +364,8 @@ barcode. Both feed the same `{href, label, icon, key}[]`.
 ### `TabSwipe`: the same move by hand
 
 ```svelte
-<TabBar {tabs} {active} bind:height shortcuts onnavigate={go} />
-<TabSwipe {tabs} {active} onnavigate={go} preload={preloadData} />
+<TabBar {tabs} {active} bind:height shortcuts gestures="both" onnavigate={go} />
+<TabSwipe {tabs} {active} onnavigate={go} preload={preloadData} middle />
 ```
 
 The bar's keyboard shortcuts, for the screen that has no keyboard: below 900px a
@@ -353,6 +381,73 @@ What moves is what exists: the column gives against the pull, the peek arrives,
 and the release is the navigation. Pass `preload` (SvelteKit's `preloadData`) and
 the destination is fetched the moment the gesture arms, so letting go lands on a
 page rather than a spinner.
+
+### The same move on a desktop
+
+The finger's swipe is narrow-screen only — wide, the tabs are labelled and the
+bar is a row of big targets. But the *motion* still helps with a mouse, so
+there are two more, and both ignore `upTo` because they exist for exactly the
+widths it excludes.
+
+**`wheel`** (on by default) moves a tab once whatever is under the cursor has no
+sideways travel left. Chrome reports the three ways of asking for horizontal
+scroll differently, and the third is why this reaches everyone:
+
+| how | reported as |
+|---|---|
+| trackpad, two fingers | `deltaX` |
+| a wheel that tilts | `deltaX` |
+| **`Shift` + any wheel at all** | **`deltaY` + `shiftKey`** — scrolls sideways regardless |
+
+A `wheel` is also *cancelable*, unlike a `pointermove`, so the edge negotiation
+here is the plain thing the touch path had to go the long way round for: ask the
+scroller under the cursor whether it has travel, and either leave the event alone
+or take it. None of the `data-swipe-x` marking is involved.
+
+There is no "end" event on a wheel, so a gesture ends by going quiet — and the
+lock after a commit lasts until it does, rather than for a fixed time. That was
+measured, not assumed: a throw kept arriving long enough to walk **three tabs
+past** a 450ms window. One flick, one tab, however hard it was thrown.
+
+**`middle`** (off by default) is hold-the-middle-button-and-push. It is off
+because it is not free: middle-hold is the browser's autoscroll on Windows and
+Linux, and arming this takes that away for the whole site. A plain middle click
+still opens a link in a new tab — only a click that turned into a drag is
+swallowed. It ignores scrollers entirely, since a middle drag scrolls nothing
+and so competes with nothing.
+
+**One rule for direction, on every input: right → left brings the next tab in.**
+A thumb, the middle button and a wheel all agree, so the movement means the same
+thing wherever a reader makes it.
+
+That is a choice, and the other one is defensible: a wheel could follow the
+*scroll* instead — `deltaX > 0` scrolls right, and taking that as "next" matches
+the direction the browser's own back/forward swipe uses. It was the first cut
+here. But it means the same physical movement changes tabs one way on a phone
+and the other on a desktop, and which of the two a given movement even produces
+depends on the reader's natural-scrolling setting. Following the hand is the
+only rule this can state and keep.
+
+So the wheel handler carries two directions that are deliberately not the same
+one: where the content would go, which is the only thing a scroller can be asked
+about, and which tab, which follows the hand.
+
+A scroller that is handed the gesture **keeps all of it**, not only the part it
+can spend — otherwise one long throw runs a table to its last column and turns
+the page as well, which is two answers to one movement. Stop, and the next flick
+is the page's.
+
+`TabBar` names all of it in one place: pass `gestures="wheel" | "middle" |
+"both"` and the hint beside the key caps grows a sideways-arrows `scroll` and a
+mouse with its middle button lit. Pass only what the page actually turned on — a
+hint for a gesture that does nothing is worse than no hint.
+
+The scroll hint names the **axis and nothing else**. `Shift`+wheel still works,
+and is how a plain mouse gets there, but saying so read as a hint about
+scrolling rather than about tabs — and everyone already knows their own way to
+scroll sideways.
+
+### What the finger's swipe will not take
 
 A page-wide horizontal drag is the most contested gesture on a phone, so it
 yields, in this order:

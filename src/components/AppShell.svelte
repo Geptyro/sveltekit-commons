@@ -20,23 +20,45 @@
 	 *
 	 * ── How the collapse works ───────────────────────────────────────────
 	 *
-	 * `.shell` declares the collapsed geometry as custom properties and the two
-	 * expanded states override them. Nothing toggles a class on a nav row, and
-	 * nothing measures anything: the rail's width, the label visibility, the
-	 * icon size and the burger's own glyph all read from the same variables and
-	 * transition together.
+	 * One box narrows and clips. That is the whole of it.
 	 *
-	 * That also solves the awkward part of putting this in a package. Svelte
-	 * scopes styles to the component that declares the markup, so this file
-	 * cannot style anything a caller passes in through a snippet. It does not
-	 * need to — the variables cascade, so snippet content that reads them
-	 * collapses in step. The ones worth knowing:
+	 * A nav row's geometry does not depend on the state: same icon size, same
+	 * paddings, same row height, icon in the same place to the pixel. Collapsing
+	 * animates `--side-w` and nothing else, and the labels go because the box
+	 * they sit in got narrower than they are — `.item` is `overflow: hidden`, so
+	 * they slide out behind the icons rather than being switched off.
 	 *
-	 *   --label-display   `none` in the rail, `block` expanded. Put it on any
-	 *                     text that should disappear when the rail collapses.
+	 * It used to re-lay-out the list instead: `--label-display: none` took every
+	 * label out of flow on frame one (a display switch cannot be transitioned,
+	 * so the words vanished rather than left), `--nav-justify` flipped to centre,
+	 * the paddings and the icon sizes changed, and the whole column shifted
+	 * sideways while the width caught up. Everything moved at once, which is
+	 * exactly what a collapse should not look like.
+	 *
+	 * The one thing that makes it work is the paddings, which are chosen so that
+	 * a left-aligned row IS centred once the box is a rail:
+	 *
+	 *     --side-pad-x + --nav-pad-x + --nav-slot / 2  ==  --rail-w / 2
+	 *
+	 * and the docked rail's width is derived from the burger (see the ≥900px
+	 * block) so that axis is the burger's too. Change one of the four and check
+	 * the identity still holds, or the icons will sit off-centre in the rail.
+	 *
+	 * That variables-not-classes approach also solves the awkward part of
+	 * putting this in a package. Svelte scopes styles to the component that
+	 * declares the markup, so this file cannot style anything a caller passes in
+	 * through a snippet. It does not need to — the variables cascade, so snippet
+	 * content that reads them follows along. The ones worth knowing:
+	 *
+	 *   --label-display   `none` in the rail, `block` expanded. For prose in the
+	 *                     footer, which cannot be clipped gracefully — nav rows
+	 *                     no longer use it, they clip.
+	 *   --foot-align      `center` in the rail, `flex-start` expanded. The
+	 *                     footer's marks stack on the icons' axis when the rail
+	 *                     is all there is. (`--nav-justify` is the old name and
+	 *                     still tracks it, for callers drawing their own rows.)
 	 *   --nav-slot        icon column width      --nav-glyph  icon size
-	 *   --nav-pad-x/y     row padding            --nav-justify  row alignment
-	 *   --label-align     alignment for group headings
+	 *   --nav-pad-x/y     row padding            --label-align  group headings
 	 *   --foot-dir        footer stacking direction (column; a site may override)
 	 *
 	 * NavItem and NavSection already read them, so the common cases need none
@@ -382,6 +404,19 @@
 
 	.shell {
 		/* ── shell metrics; a site may override any of them ─────────────── */
+		/* The rail is a gutter the content is permanently indented by, and on a
+		   phone it is the *only* state most visitors ever see it in, so its width
+		   is spent on every page. It used to be 58px around a 20px glyph — 19px
+		   of dead air either side, which read as an oversized gutter rather than
+		   a generous one.
+
+		   What actually sets the floor is the footer, not the icons. A collapsed
+		   nav row only needs its glyph, but a site's credit marks keep their text
+		   down here: STALZONE's "EXBO" attribution measures 32.4px at 12px, so
+		   34px of usable width (42 less --side-pad-x each side) is the narrowest
+		   the rail goes before that starts clipping. Take the rail below this and
+		   check the footers, not the nav. The docked rail is wider (see the
+		   ≥900px block) and lands on the same 34px from the other direction. */
 		--rail-w: 42px;
 		/* how far the narrow drawer opens; the rail's width is its other end */
 		--drawer-w: min(280px, 82vw);
@@ -409,34 +444,60 @@
 		--z-scrim: 45;
 		--z-nav: 50;
 
-		/* ── collapsed geometry; the two blocks below expand it ─────────── */
-		--side-w: var(--rail-w);
+		/* ── nav geometry ─────────────────────────────────────────────────
+		   None of it depends on the state. The collapse animates --side-w and
+		   clips; a row that changed shape on the way would be the one thing in
+		   the sidebar moving, which is what this used to look like.
+
+		   Every number here lands on 34px, and 34px is the burger's box. A row's
+		   pill in the rail is 34 wide (the rail less --side-pad-x either side)
+		   and 34 tall (the 26px slot plus --nav-pad-y above and below), so it is
+		   square, and it is the same square the burger draws in the bar directly
+		   above it. It was 34×36 — two pixels out, which is invisible on a hover
+		   but reads as a rectangle once the accent fills it on the active row.
+
+		   The paddings are also what let the rows be left-aligned in every
+		   state: left-aligned IS centred once the box is a rail, because
+		   4 + 4 + 26/2 = 21 = 42/2. Keep that identity (see the header comment)
+		   or the icons sit off the rail's axis. */
+		--nav-slot: 26px;
+		--nav-glyph: 20px;
+		--nav-pad-x: 4px;
+		--nav-pad-y: 4px;
 		--side-pad-x: 4px;
+		/* A picture icon's side — one length, spent on both dimensions, so a
+		   portrait is square because it is defined as one and not because the
+		   two paddings happen to match. It is the row's height, which is what
+		   makes it fill the pill top to bottom and, in the rail, corner to
+		   corner. Retune --nav-pad-x and the picture stays a centred square; it
+		   just stops reaching the pill's left and right edges. */
+		--nav-tile: calc(var(--nav-slot) + var(--nav-pad-y) * 2);
+		/* left in both states: an alignment that flips is an alignment that
+		   moves, and by the identity above left already reads as centred */
+		--label-align: left;
+
+		/* ── what the collapse actually changes ───────────────────────── */
+		--side-w: var(--rail-w);
+		/* Footer prose only. Nav labels are not switched off any more — they are
+		   clipped by the box, which is what makes them slide rather than vanish —
+		   but a paragraph cannot be clipped gracefully, so the credit lines still
+		   fold. */
 		--label-display: none;
-		--nav-justify: center;
-		--nav-pad-x: 0px;
-		--nav-pad-y: 5px;
-		--label-align: center;
+		/* the footer's marks have no labels to be left of once the rail is all
+		   there is, so they stack on the icons' axis instead */
+		--foot-align: center;
+		--side-scrollbar: none;
 		/* Stacked in both states. Side by side reads better in the rail and was
 		   the original choice, but it only fit while the footer had two marks —
 		   a third (the tip link) ran it off the ~34px of usable width the rail
 		   has. A column cannot overflow however many links a site puts there. */
 		--foot-dir: column;
-		--side-scrollbar: none;
-		/* The rail is a gutter the content is permanently indented by, and on a
-		   phone it is the *only* state most visitors ever see it in, so its width
-		   is spent on every page. It used to be 58px around a 20px glyph — 19px
-		   of dead air either side, which read as an oversized gutter rather than
-		   a generous one.
-
-		   What actually sets the floor is the footer, not the icons. A collapsed
-		   nav row only needs its glyph, but a site's credit marks keep their text
-		   down here: STALZONE's "EXBO" attribution measures 32.4px at 12px, so
-		   34px of usable width (42 less 4px of padding each side) is the narrowest
-		   the rail goes before that starts clipping. Take the rail below this and
-		   check the footers, not the nav. */
-		--nav-slot: 26px;
-		--nav-glyph: 18px;
+		/* The old name for --foot-align, kept because it is what the callers
+		   drawing their own rail widgets read (the companion's update pill, both
+		   sites' MadeBy). NavItem no longer reads it — its rows are left-aligned
+		   in every state — so this is now only ever the footer's alignment, and
+		   the two sites can move to the honest name whenever they touch it. */
+		--nav-justify: var(--foot-align);
 
 		display: flex;
 		flex-direction: column;
@@ -462,17 +523,41 @@
 	/* Expanded, in two halves: wide screens unless you collapsed the nav,
 	   narrow screens only while the drawer is open. Keep them in step. */
 	@media (min-width: 900px) {
+		/* Docked, the sidebar is a column *under the burger*, so it is laid out
+		   from the burger rather than from the window's edge: a row's pill is
+		   the burger's box — same left edge, same 34px — and the icons run down
+		   the burger's own axis. --side-pad-x is the bar's padding for exactly
+		   that reason, and the collapsed rail is the burger's box plus that
+		   padding either side, so nothing here can drift out of step with the
+		   bar if a site retunes --top-pad-x or --burger-w.
+
+		   It settles the collapse as well. The docked rail used to be the
+		   outlier of the three states the icons take: expanded rows put the
+		   glyph at 33px and the burger at 31px, but the 42px rail put it at
+		   21px, so toggling the nav slid the whole column 12px sideways under a
+		   mark that never moved. All three are 31px now, and the icons do not
+		   move at all.
+
+		   The footer keeps its floor: 62 less 14px either side is the same 34px
+		   of usable width the 42px rail was cut to.
+
+		   Wide only. Narrow screens keep the 42px rail — there it is the state
+		   nearly every visitor sees, a gutter every page pays for on the
+		   smallest screens, and the burger already drops onto its axis at
+		   ≤620px. */
+		.shell {
+			--side-pad-x: var(--top-pad-x);
+		}
+		.shell.nav-closed {
+			--rail-w: calc(var(--burger-w) + var(--top-pad-x) * 2);
+		}
+		/* Width, and what cannot survive being clipped. Everything else about a
+		   row is in the base block and stays there. */
 		.shell:not(.nav-closed) {
 			--side-w: 240px;
-			--side-pad-x: 12px;
 			--label-display: block;
-			--nav-justify: flex-start;
-			--nav-pad-x: 10px;
-			--nav-pad-y: 7px;
-			--label-align: left;
+			--foot-align: flex-start;
 			--side-scrollbar: thin;
-			--nav-slot: 22px;
-			--nav-glyph: 16px;
 			/* the button says what it does next: close */
 			--burger-turn: 180deg;
 			--burger-fold: 6px;
@@ -485,17 +570,12 @@
 			--content-pad-x: 16px;
 		}
 		/* --side-w stays the rail: the panel overlays the content, so the
-		   gutter under it must not move */
+		   gutter under it must not move. Same short list as the wide block —
+		   the panel is the rail made wider, not a differently-shaped nav. */
 		.shell.nav-open {
-			--side-pad-x: 12px;
 			--label-display: block;
-			--nav-justify: flex-start;
-			--nav-pad-x: 10px;
-			--nav-pad-y: 7px;
-			--label-align: left;
+			--foot-align: flex-start;
 			--side-scrollbar: thin;
-			--nav-slot: 22px;
-			--nav-glyph: 16px;
 			--burger-turn: 180deg;
 			--burger-fold: 6px;
 			--burger-cross: 45deg;
@@ -731,7 +811,12 @@
 
 	.foot {
 		margin-top: auto;
-		padding: calc(var(--nav-pad-y) * 2 + 4px) var(--nav-pad-x) 0;
+		/* No horizontal padding, unlike a nav row. The credit needs every pixel
+		   the rail has — --rail-w is set by what it measures, not by the icons —
+		   and spending --nav-pad-x on it either side would put it under that
+		   floor. It sits on the sidebar's own inset instead, which is why it
+		   reads a little left of the icons rather than under them. */
+		padding: calc(var(--nav-pad-y) * 2 + 8px) 0 0;
 		font-size: 10.5px;
 		color: var(--text-faint);
 		line-height: 1.5;
@@ -779,9 +864,8 @@
 			   below it never repeats. One row clears the next by its own padding,
 			   nav's 1px gap, then the next row's padding — so clearing the bar by
 			   the same amount means padding + --nav-pad-y = --nav-pad-y + 1px +
-			   --nav-pad-y, which is this. 6px against the collapsed rail, 8px once
-			   the drawer's rows loosen, and it eases between the two with the rest
-			   of the collapse instead of being a second number to keep in step. */
+			   --nav-pad-y, which is this. Derived rather than written down so it
+			   cannot fall out of step with the rows if --nav-pad-y is retuned. */
 			--side-pad-top: calc(var(--nav-pad-y) + 1px);
 		}
 		.sidebar {
