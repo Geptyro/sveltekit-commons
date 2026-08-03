@@ -904,6 +904,26 @@
 		.body {
 			padding-left: var(--rail-w);
 		}
+		/* The burger takes a rail-wide slot at the window's edge, so its mark
+		   lands on the axis the rail's icons run down — --rail-w / 2, with
+		   nothing to measure.
+
+		   Docked, the alignment is made the other way round: the rail is derived
+		   from the burger's box (see the ≥900px block), which it can afford
+		   because a wide window has the room. Here the rail is the floor —
+		   42px, a gutter every page pays for on the smallest screens — so it is
+		   the burger that gives way. The band between the two used to inherit
+		   neither, keeping the bar's 14px inset against a 42px rail, and the
+		   mark sat 10px right of the column beneath it.
+
+		   The ≤620px bar below reaches the same place from its own two-row
+		   layout; this is just where that stops being a phone's special case. */
+		.topbar {
+			padding-left: 0;
+		}
+		.burger {
+			width: var(--rail-w);
+		}
 		.shell {
 			/* The rail here butts straight onto the bar rather than sitting under a
 			   docked header with room to spare, and 14px read as a gap the rhythm
@@ -974,9 +994,11 @@
 			align-content: center;
 			column-gap: 0;
 			row-gap: 2px;
-			/* left is 0 because the burger below fills a rail-wide slot from the
-			   very edge; the brand adds --bar-inset back for itself, and the right
-			   is that same inset so the two ends match */
+			/* left is 0 because the burger fills a rail-wide slot from the very
+			   edge — which the whole narrow range does now, so this is only
+			   restating it for a bar that sets all four sides at once. The brand
+			   adds --bar-inset back for itself, and the right is that same inset
+			   so the two ends match. */
 			padding: 5px var(--bar-inset) 5px 0;
 		}
 		/* On the rail's centre line, which is where the burger's glyph and every
@@ -1009,9 +1031,10 @@
 			flex-basis: 100%;
 			height: 0;
 		}
+		/* only the row it drops to — the rail-wide slot it sits in is the whole
+		   narrow range's now, not this bar's */
 		.burger {
 			order: 3;
-			width: var(--rail-w);
 		}
 		.crumb {
 			order: 4;
