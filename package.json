@@ -1,6 +1,6 @@
 {
 	"name": "sveltekit-commons",
-	"version": "0.12.0",
+	"version": "0.12.1",
 	"description": "Design-token contract, Svelte 5 primitives and dependency-free helpers shared across SvelteKit sites",
 	"type": "module",
 	"license": "MIT",

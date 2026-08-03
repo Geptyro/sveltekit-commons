@@ -41,11 +41,12 @@
 	 *      gesture. STALZONE's pan-and-zoom trees declare the first, TabBar is
 	 *      the second, and the attribute is there for anything a site wants to
 	 *      keep for itself.
-	 *   3. A horizontally scrollable ancestor keeps the drag outright. Not until
-	 *      it runs out of travel — outright; `claimant` below has the browser
-	 *      evidence for why the softer rule cannot be built. So UAR's replay
-	 *      table keeps its own sideways scroll and this never fires from inside
-	 *      it.
+	 *   3. A horizontally scrollable ancestor keeps the drag until it runs out of
+	 *      travel, and hands over the one pull it cannot use. Scroll UAR's replay
+	 *      table to its last column and the next drag that way changes tab; every
+	 *      drag the table can still spend stays the table's. How that is made to
+	 *      work is under "Handing the gesture back" below — it is not the obvious
+	 *      way, because the obvious way does not work.
 	 *
 	 * The gesture is narrow-screen only. On a desktop the tabs are labelled, the
 	 * bar is a wide row of targets, and there is nothing a drag would improve.
@@ -101,6 +102,7 @@
 
 	let pid = null;
 	let armed = false;
+	let blocker = null; /* the sideways scroller the finger came down inside */
 	let x0 = 0;
 	let y0 = 0;
 	let lastX = 0;
@@ -110,38 +112,118 @@
 	let settle = null;
 
 	/**
-	 * Whether anything up the chain from `el` has a better claim on a sideways
-	 * drag than the page does.
-	 *
-	 * A sideways scroller is a refusal and not a negotiation, which took a
-	 * browser to find out. The obvious design is the one the platform uses for a
-	 * list inside a pager — the scroller keeps the drag until it runs out of
-	 * travel, and the pull past its end belongs to the page. It cannot be built
-	 * on pointer events: `preventDefault` on a `pointermove` does not stop a
-	 * scroll, `touch-action` is the only thing that does, and that is settled
-	 * before the finger lands rather than at the edge. So the gesture arms at the
-	 * scroller's end, the browser claims it anyway, `pointercancel` arrives and
-	 * the page twitches and gives it back. Measured, with the table at its edge
-	 * and `overscroll-behavior-x: none` for good measure: cancelled both ways.
-	 *
-	 * Refusing outright is the honest version of the same answer. It costs a
-	 * page whose content is one wide table — UAR's replays — the gesture
-	 * entirely, and the fix for that page is a table that does not need to
-	 * scroll sideways on a phone, not a cleverer gesture.
+	 * What, up the chain from `el`, has a better claim on a sideways drag than
+	 * the page does: `'never'` for a refusal, the element for a sideways
+	 * scroller that may still hand the gesture over at its edge, or null.
 	 */
 	function claimant(el) {
 		for (let n = el; n && n.nodeType === 1 && n.tagName !== 'MAIN'; n = n.parentElement) {
-			if (n.dataset?.noswipe !== undefined) return true;
+			if (n.dataset?.noswipe !== undefined) return 'never';
 			const tag = n.tagName;
-			if (tag === 'NAV' || tag === 'DIALOG') return true;
+			if (tag === 'NAV' || tag === 'DIALOG') return 'never';
 			const cs = getComputedStyle(n);
 			/* it took the gesture out of the browser's hands, so it is not mine
 			   to take either */
-			if (cs.touchAction === 'none') return true;
+			if (cs.touchAction === 'none') return 'never';
 			const ox = cs.overflowX;
-			if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 1) return true;
+			if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth > n.clientWidth + 1) return n;
 		}
-		return false;
+		return null;
+	}
+
+	/** Whether `el` still has somewhere to go when the finger travels `d`. */
+	const hasTravel = (el, d) =>
+		d > 0 ? el.scrollLeft > 1 : el.scrollLeft < el.scrollWidth - el.clientWidth - 1;
+
+	/* ── Handing the gesture back at a scroller's edge ────────────────────
+	 *
+	 * A wide table should keep every sideways drag it can use and give up the
+	 * one it cannot: scroll it to its last column and the next pull that way is
+	 * the page's. That is what the platform does for a list inside a pager, and
+	 * the first attempt at it here failed outright — the gesture armed at the
+	 * table's end, the browser took it anyway, `pointercancel` arrived and the
+	 * page twitched and gave it back. `preventDefault` on a `pointermove` does
+	 * not stop a scroll. Only `touch-action` does.
+	 *
+	 * Which is the way in, once you stop reading `touch-action` as a constant.
+	 * It is read when the finger lands, and it has DIRECTIONAL values — so a
+	 * scroller can say, before anything is touched, which way it can still go:
+	 *
+	 *     at the left edge    pan-y pan-right pinch-zoom   (only leftward drags)
+	 *     mid-scroll          pan-y pan-x     pinch-zoom   (both, as before)
+	 *     at the right edge   pan-y pan-left  pinch-zoom   (only rightward drags)
+	 *
+	 * The browser then declines the drag the table has no use for, no
+	 * `pointercancel` is fired, and the pointer stream arrives here intact. The
+	 * table's own scrolling is untouched in every direction it can actually
+	 * scroll, and its vertical scrolling is untouched throughout.
+	 *
+	 * So the scrollers are found and marked — `data-swipe-x`, read by the rules
+	 * at the bottom of this file — on mount, whenever `main`'s subtree changes,
+	 * whenever anything resizes, and on every scroll. An attribute rather than an
+	 * inline style: it is somebody else's markup, and a state you can read in
+	 * devtools beats a computed value you cannot.
+	 *
+	 * A scroll container with nothing to scroll sideways is marked too, `still`,
+	 * and that is not a formality — it is the same trap the shell's `main` fell
+	 * into. `overflow-x: auto` claims sideways drags whether or not there is
+	 * anything to pan: UAR's "Wins by mode" is three columns in a `.tablewrap`
+	 * that never overflows on a phone, and it swallowed every swipe crossing it.
+	 * Having nothing to scroll is not the same as not taking the gesture, and
+	 * only `touch-action` can say the second thing.
+	 *
+	 * Directional `touch-action` is Chromium-only. Elsewhere the declaration is
+	 * invalid and dropped, the scroller keeps `auto`, and the swipe simply does
+	 * not start from inside a table — which is exactly where this stood before.
+	 */
+	let marked = [];
+
+	function mark(el) {
+		const room = el.scrollWidth - el.clientWidth;
+		el.dataset.swipeX =
+			room <= 1
+				? 'still'
+				: el.scrollLeft > 1
+					? el.scrollLeft < room - 1
+						? 'mid'
+						: 'end'
+					: 'start';
+	}
+
+	/**
+	 * Find the scroll containers under `main` and mark them.
+	 *
+	 * Every element, and a `getComputedStyle` for each, because there is no
+	 * cheaper question to ask: whether an element takes sideways drags is
+	 * `overflow-x`, and no DOM property reports it. The tempting pre-filter —
+	 * skip anything that does not overflow — is the bug this exists to fix,
+	 * since a scroller with nothing to scroll takes the gesture just the same.
+	 * Measured on the two heaviest pages of UAR: 1.6ms over 478 elements, 2.4ms
+	 * over 1536. It runs on mount, on a coalesced mutation, and on a resize —
+	 * never in a gesture, never per frame.
+	 *
+	 * Anything the swipe could not have started inside is left alone: a `<nav>`,
+	 * a dialog, `[data-noswipe]`, or a surface that already took the gesture for
+	 * itself. TabBar is the one that matters — the bar scrolls sideways when a
+	 * subject has more tabs than fit, and it should go on doing that untouched.
+	 */
+	function rescan() {
+		const root = document.querySelector('main');
+		const found = [];
+		if (root && innerWidth < upTo) {
+			for (const el of root.querySelectorAll('*')) {
+				const cs = getComputedStyle(el);
+				const ox = cs.overflowX;
+				if (ox !== 'auto' && ox !== 'scroll') continue;
+				if (cs.touchAction === 'none') continue;
+				if (el.closest('nav, dialog, [data-noswipe]')) continue;
+				found.push(el);
+			}
+		}
+		for (const el of marked) if (!found.includes(el)) delete el.dataset.swipeX;
+		for (const el of found) mark(el);
+		marked = found;
+		return found;
 	}
 
 	function down(e) {
@@ -155,7 +237,9 @@
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		/* the shell's chrome lives outside `main`; so does the drawer it drags */
 		if (!e.target?.closest?.('main')) return;
-		if (claimant(e.target)) return;
+		const claim = claimant(e.target);
+		if (claim === 'never') return;
+		blocker = claim;
 		pid = e.pointerId;
 		x0 = lastX = e.clientX;
 		y0 = e.clientY;
@@ -173,6 +257,12 @@
 			/* upright, or near enough that they are probably reading */
 			if (Math.abs(dx) < Math.abs(dy) * UPRIGHT) return reset();
 			const d = dx > 0 ? 1 : -1;
+			/* the scroller under the finger has not finished with the gesture.
+			   It reaches here at all only because it marked itself spent in this
+			   direction, so the browser let the drag through rather than
+			   scrolling — but the mark can be a frame stale, and this is the
+			   authority. */
+			if (blocker && hasTravel(blocker, d)) return reset();
 			const t = d > 0 ? prev : next;
 			if (!t) return reset();
 			armed = true;
@@ -217,6 +307,7 @@
 	 */
 	function reset() {
 		pid = null;
+		blocker = null;
 		if (armed) {
 			armed = false;
 			const root = document.documentElement;
@@ -251,12 +342,57 @@
 		addEventListener('pointerup', up, opts);
 		addEventListener('pointercancel', reset, opts);
 		addEventListener('click', click, true);
+
+		/* Capture, because `scroll` does not bubble: one listener then hears
+		   every scroller under the document instead of one per element, and
+		   re-marking the one that moved is a read of two numbers. */
+		const onScroll = (e) => {
+			const el = e.target;
+			if (el?.nodeType === 1 && el.dataset?.swipeX !== undefined) mark(el);
+		};
+		addEventListener('scroll', onScroll, true);
+
+		/* A scroller that changed size has only changed which mark it wants, so
+		   this re-marks and never rescans — which is also what keeps it from
+		   looping, since `observe` fires once per element the moment it is
+		   called. */
+		const sizes = new ResizeObserver((entries) => {
+			for (const entry of entries) if (entry.target.isConnected) mark(entry.target);
+		});
+
+		/* Coalesced to a frame: a page settling in emits mutations by the
+		   hundred, and the answer is the same for all of them. */
+		let queued = 0;
+		const soon = () => {
+			cancelAnimationFrame(queued);
+			queued = requestAnimationFrame(() => {
+				sizes.disconnect();
+				for (const el of rescan()) sizes.observe(el);
+			});
+		};
+		const mo = new MutationObserver(soon);
+		const ro = new ResizeObserver(soon);
+		const root = document.querySelector('main');
+		if (root) {
+			mo.observe(root, { childList: true, subtree: true });
+			/* the box, for a viewport that changed what fits and what overflows */
+			ro.observe(root);
+		}
+		for (const el of rescan()) sizes.observe(el);
+
 		return () => {
 			removeEventListener('pointerdown', down, opts);
 			removeEventListener('pointermove', move, opts);
 			removeEventListener('pointerup', up, opts);
 			removeEventListener('pointercancel', reset, opts);
 			removeEventListener('click', click, true);
+			removeEventListener('scroll', onScroll, true);
+			mo.disconnect();
+			ro.disconnect();
+			sizes.disconnect();
+			cancelAnimationFrame(queued);
+			for (const el of marked) delete el.dataset.swipeX;
+			marked = [];
 			clearTimeout(settle);
 			delete document.documentElement.dataset.tabSwipe;
 			document.documentElement.style.removeProperty('--tab-swipe-x');
@@ -349,5 +485,31 @@
 	:global(html[data-tab-swipe]) {
 		user-select: none;
 		-webkit-user-select: none;
+	}
+
+	/*
+	 * A sideways scroller, saying which way it can still go — the marks the
+	 * script above keeps on it, spelled out as the only thing that can actually
+	 * stop the browser claiming a drag.
+	 *
+	 * `pan-y` is in all four so the scroller never loses its vertical scrolling,
+	 * and `pinch-zoom` so a table nobody can read at this size can still be
+	 * zoomed. The directional halves are the point: at an edge the browser is
+	 * told it may pan only the way there is travel, and the drag the other way
+	 * arrives here instead of being swallowed as an overscroll. `still` names
+	 * the box that could scroll sideways but has nothing to scroll, and takes
+	 * the sideways half away from it altogether.
+	 */
+	:global([data-swipe-x='still']) {
+		touch-action: pan-y pinch-zoom;
+	}
+	:global([data-swipe-x='start']) {
+		touch-action: pan-y pan-right pinch-zoom;
+	}
+	:global([data-swipe-x='mid']) {
+		touch-action: pan-y pan-x pinch-zoom;
+	}
+	:global([data-swipe-x='end']) {
+		touch-action: pan-y pan-left pinch-zoom;
 	}
 </style>

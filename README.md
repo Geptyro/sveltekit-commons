@@ -363,7 +363,7 @@ yields, in this order:
 | the tab bar, a dialog | `<nav>` / `<dialog>` up the chain |
 | a surface that took the gesture itself | `touch-action: none` — which is how STALZONE's pan-zoom trees keep it, with no change to them |
 | anything a site wants to keep | `[data-noswipe]` |
-| a wide table or any sideways scroller | outright, for as long as the pointer lasts |
+| a wide table or any sideways scroller | until it runs out of travel — see below |
 
 **It needs a scrolling `<Page>`**, and does nothing without one. TabSwipe owns
 no box: it publishes `data-tab-swipe` and `--tab-swipe-x` on the root, and
@@ -388,15 +388,53 @@ package guessing at a caller's markup breaks on the next restructure.
 A route on **`<Page fill>`** — one whose insides scroll — gets no swipe:
 whatever scrolls in there claims the drag first.
 
-**A sideways scroller refuses outright rather than handing over at its edge**,
-and that is not laziness. The pager rule — the scroller keeps the drag until it
-runs out of travel, then the page takes it — cannot be built on pointer events:
-`preventDefault` on a `pointermove` does not stop a scroll, only `touch-action`
-does, and that is settled before the finger lands. Measured with the table at
-its edge, and again with `overscroll-behavior-x: none`: the gesture arms, the
-browser claims it anyway, `pointercancel` arrives. So a page that *is* one wide
-table gets no swipe, and the fix for that page is a table that does not need to
-scroll sideways on a phone.
+### Handing the gesture back at a table's edge
+
+A wide table keeps every sideways drag it can use and gives up the one it
+cannot: scroll it to its last column, and the next pull that way changes tab.
+
+The obvious way to build that does not work. `preventDefault` on a
+`pointermove` does not stop a scroll — only `touch-action` does, and that is
+settled before the finger lands, not at the edge. Measured with the table at its
+end, and again with `overscroll-behavior-x: none`: the gesture arms, the browser
+claims it anyway, `pointercancel` arrives, the page twitches and gives it back.
+
+The way in is that `touch-action` has **directional** values, and is read when
+the finger lands. So a scroller can say in advance which way it can still go.
+TabSwipe finds the sideways scrollers under `main` and marks them —
+`data-swipe-x`, kept current on scroll, on mutation and on resize:
+
+| mark | `touch-action` | the browser takes | the page gets |
+|---|---|---|---|
+| `start` | `pan-y pan-right pinch-zoom` | drags left (it can still scroll) | drags right |
+| `mid` | `pan-y pan-x pinch-zoom` | both | neither |
+| `end` | `pan-y pan-left pinch-zoom` | drags right | drags left |
+| `still` | `pan-y pinch-zoom` | nothing sideways | both |
+
+**`still` is not a formality.** A scroll container claims sideways drags whether
+or not it has anything to pan — the same trap the shell's `main` fell into.
+UAR's "Wins by mode" is three columns in a `.tablewrap` that never overflows on
+a phone, and it swallowed every swipe crossing it. Having nothing to scroll is
+not the same as not taking the gesture, and only `touch-action` says the second
+thing. So the scan cannot pre-filter on "does it overflow" — it asks
+`overflow-x` of every element under `main`, which costs 1.6ms over 478 elements
+and 2.4ms over 1536, on mount and on a coalesced mutation or resize. Never in a
+gesture.
+
+Left alone: anything the swipe could not have started inside anyway — a
+`<nav>`, a dialog, `[data-noswipe]`, or a surface already on `touch-action:
+none`. TabBar is the one that matters, since the bar scrolls sideways when a
+subject has more tabs than fit.
+
+Verified in Chrome, in isolation and then on the page: at `start` a leftward
+drag scrolls the table 148px and cancels the pointer, while a rightward drag
+reaches `pointerup` untouched and changes tab. `pan-y` is in all three so the
+scroller never loses its vertical scrolling, and `pinch-zoom` so a table too
+small to read can still be zoomed.
+
+Directional `touch-action` is Chromium-only. Elsewhere the declaration is
+invalid and dropped, the scroller keeps `auto`, and the swipe just does not
+start from inside a table.
 
 ## The feedback form
 
