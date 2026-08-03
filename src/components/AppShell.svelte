@@ -91,11 +91,22 @@
 		children
 	} = $props();
 
-	/* `navOpen === null` means "not decided yet" — the CSS default (docked when
-	   wide) then holds, so prerendered markup cannot flash the wrong state. */
+	/* `navOpen === null` means "not decided yet": the remembered collapse lives
+	   in localStorage, which nothing rendering on a server can read, so the
+	   markup goes out in the CSS default and hydration corrects it.
+
+	   Two things keep that correction from being a show. A site can stamp the
+	   choice on the document before the first paint — see `data-nav` below, and
+	   the README — in which case there is nothing to correct. Failing that,
+	   `settled` holds every transition off until the shell has painted what it
+	   settled on, so the correction lands as a snap and not as the sidebar
+	   sliding shut in front of the reader. Without it a visitor who left the
+	   nav collapsed watches it open on every single load and then close again,
+	   which is the one state it should never have been in. */
 	let wide = $state(true);
 	let compact = $state(false);
 	let navOpen = $state(null);
+	let settled = $state(false);
 	const drawer = $derived(navOpen === true && !wide);
 
 	onMount(() => {
@@ -115,6 +126,10 @@
 		const syncCompact = () => (compact = compactMq.matches);
 		syncNav();
 		syncCompact();
+		/* Two frames, not one: a class that lands in the same update as the width
+		   it is meant to freeze leaves the browser free to transition it anyway.
+		   One frame to paint the settled state, the next to allow motion again. */
+		requestAnimationFrame(() => requestAnimationFrame(() => (settled = true)));
 		wideMq.addEventListener('change', syncNav);
 		compactMq.addEventListener('change', syncCompact);
 		return () => {
@@ -311,6 +326,7 @@
 	bind:this={shellEl}
 	class:nav-open={navOpen === true || dragP !== null}
 	class:nav-closed={navOpen === false && dragP === null}
+	class:settling={!settled}
 	class:dragging={dragP !== null}
 	style={shellVars}
 >
@@ -548,12 +564,28 @@
 		.shell {
 			--side-pad-x: var(--top-pad-x);
 		}
-		.shell.nav-closed {
+		/* Paired with the expanded rule below, and for the same reason: the rail's
+		   docked width has to be right in the pre-paint state too, or a site that
+		   stamps `data-nav` trades the slide for a 20px jump as hydration adds
+		   the class. */
+		.shell.nav-closed,
+		:global(html[data-nav='closed']) .shell:not(.nav-open) {
 			--rail-w: calc(var(--burger-w) + var(--top-pad-x) * 2);
 		}
 		/* Width, and what cannot survive being clipped. Everything else about a
-		   row is in the base block and stays there. */
-		.shell:not(.nav-closed) {
+		   row is in the base block and stays there.
+
+		   Two ways in, because the docked default is open and the shell cannot
+		   know better while it renders on a server. `.nav-open` is the hydrated
+		   answer. The other is the pre-paint one: a site may set
+		   `data-nav="closed"` on <html> from a blocking script before anything
+		   paints — the same trick a theme uses — and this rule then declines to
+		   expand a nav the visitor had already collapsed. The attribute is only
+		   ever a starting position, so it can stay on the element for the life
+		   of the page: `.nav-open` outranks it the moment the reader opens the
+		   nav, and `.nav-closed` agrees with it. */
+		.shell.nav-open,
+		:global(html:not([data-nav='closed'])) .shell:not(.nav-closed) {
 			--side-w: 240px;
 			--label-display: block;
 			--foot-align: flex-start;
@@ -591,6 +623,20 @@
 			--burger-cross: calc(45deg * var(--drag-p, 0));
 			--burger-mid: calc(1 - var(--drag-p, 0));
 		}
+	}
+
+	/* Nothing moves until the shell has painted the state it settled on. The
+	   first paint shows a default rather than the visitor's choice, and playing
+	   the difference back at them is not an animation — it is the correction,
+	   performed. A site that stamps `data-nav` before paint has no correction to
+	   make and never notices this; one that does not gets a snap instead of a
+	   slide. Everything the collapse moves is here: the panel, the heading it
+	   pushes across, and the burger's own mark. */
+	.shell.settling .sidebar,
+	.shell.settling .crumb,
+	.shell.settling .burger-glyph,
+	.shell.settling .burger-glyph .bar {
+		transition: none;
 	}
 
 	/* nothing under the hand animates: the hand is the animation */

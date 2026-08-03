@@ -254,6 +254,31 @@ because the variables cascade:
 | `--label-align` | alignment for group headings |
 | `--foot-dir` | footer stacking direction |
 
+**The remembered collapse needs a line in `app.html`.** Which way the nav was
+left lives in `localStorage`, which nothing rendering on a server can read, so
+the markup goes out in the CSS default — open, when docked — and hydration
+corrects it. For a visitor who left the rail collapsed that correction is the
+nav opening on every single load and then closing again. Stamp the answer before
+anything paints, exactly as a theme does:
+
+```html
+<script>
+  try {
+    if (localStorage.getItem('sz:nav-open') === '0')
+      document.documentElement.dataset.nav = 'closed';
+  } catch (e) {}
+</script>
+```
+
+The key is the `navKey` you pass `AppShell` and the two have to agree; nothing
+checks that for you. `'0'` rather than truthiness, because that is what the
+shell writes for closed. It is a starting position only — once hydrated the
+component owns the state, so the attribute never has to be cleared.
+
+Without it nothing breaks: transitions are held off until the shell has painted
+the state it settled on, so the correction lands as a snap rather than as the
+sidebar sliding shut in front of the reader.
+
 `NavItem` draws an `<img>` icon at `--nav-tile`, out of flow and centred, rather
 than at `--nav-slot` like an `<svg>`: a picture is the tile, not a mark drawn on
 one. Both lengths are stated explicitly and that is not optional — an
